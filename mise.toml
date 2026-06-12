@@ -1,0 +1,21 @@
+[tools]
+node = "lts"
+pnpm = "11.5"
+
+[tasks.build]
+description = "Build the plugin"
+run = "pnpm run build"
+
+[tasks.install]
+description = "Install plugin into Obsidian vault"
+depends = ["build"]
+usage = """
+flag "--location <location>" help="Location of the Obsidian Vault" default="./" env="OBSIDIAN_VAULT"
+"""
+run = """
+LOCATION="${usage_location%/}"
+DEST="${LOCATION}/.obsidian/plugins/StoryLine"
+mkdir -p "${DEST}"
+cp main.js manifest.json styles.css "${DEST}/"
+echo "Installed to ${DEST}"
+"""

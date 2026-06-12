@@ -11759,3 +11759,12 @@ body.sl-focus-active-global .titlebar {
     background: var(--background-secondary);
     font-weight: 600;
 }
+
+/* ── List field UI ────────────────────────────────── */
+.codex-field-list { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.codex-field-list-item { display: flex; gap: 4px; align-items: center; }
+.codex-field-list-item input { flex: 1; }
+.codex-list-remove-btn { flex-shrink: 0; width: 24px; height: 24px; padding: 0; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; border-radius: 4px; }
+.codex-list-remove-btn:hover { background: var(--background-modifier-error); color: var(--text-on-accent); }
+.codex-list-add-btn { align-self: flex-start; padding: 4px 8px; border: 1px dashed var(--background-modifier-border); background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 4px; font-size: var(--font-smallest); }
+.codex-list-add-btn:hover { border-color: var(--interactive-accent); color: var(--interactive-accent); }

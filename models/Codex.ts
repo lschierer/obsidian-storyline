@@ -54,6 +54,10 @@ export interface CodexFieldDef {
     multiline?: boolean;
     /** If true, render a character dropdown (populated from CharacterManager) */
     characterRef?: boolean;
+    /** If true, render as a list with add/remove UI; stored as string[] in frontmatter */
+    list?: boolean;
+    /** If set, sync this field's value(s) into Obsidian's aliases frontmatter key */
+    syncToAliases?: boolean;
 }
 
 export interface CodexFieldCategory {
@@ -142,6 +146,7 @@ export const CREATURES_CATEGORIES: CodexFieldCategory[] = [
         icon: 'bug',
         fields: [
             { key: 'name', label: 'Name', placeholder: 'Species or creature name' },
+            { key: 'pluralForm', label: 'Plural Form', placeholder: 'Irregular plural (e.g. mice, nephilim)', syncToAliases: true },
             { key: 'creatureType', label: 'Type', placeholder: 'Beast, dragon, undead, spirit…' },
             { key: 'description', label: 'Description', placeholder: 'Appearance and distinguishing features', multiline: true },
         ],
@@ -158,8 +163,8 @@ export const CREATURES_CATEGORIES: CodexFieldCategory[] = [
         title: 'Abilities',
         icon: 'zap',
         fields: [
-            { key: 'abilities', label: 'Abilities', placeholder: 'Special powers or natural weapons', multiline: true },
-            { key: 'weaknesses', label: 'Weaknesses', placeholder: 'Known vulnerabilities', multiline: true },
+            { key: 'abilities', label: 'Abilities', placeholder: 'Add an ability', list: true },
+            { key: 'weaknesses', label: 'Weaknesses', placeholder: 'Add a weakness', list: true },
         ],
     },
     {
@@ -173,7 +178,7 @@ export const CREATURES_CATEGORIES: CodexFieldCategory[] = [
 ];
 
 export const CREATURES_FIELD_KEYS: string[] = [
-    'name', 'image', 'gallery', 'creatureType', 'description',
+    'name', 'image', 'gallery', 'pluralForm', 'creatureType', 'description',
     'habitat', 'diet', 'abilities', 'weaknesses', 'behavior', 'mythology',
 ];
 
@@ -270,8 +275,8 @@ export const CULTURE_CATEGORIES: CodexFieldCategory[] = [
         title: 'Traditions',
         icon: 'flame',
         fields: [
-            { key: 'traditions', label: 'Traditions', placeholder: 'Customs, ceremonies, holidays', multiline: true },
-            { key: 'taboos', label: 'Taboos', placeholder: 'Forbidden behaviours, social boundaries', multiline: true },
+            { key: 'traditions', label: 'Traditions', placeholder: 'Add a tradition', list: true },
+            { key: 'taboos', label: 'Taboos', placeholder: 'Add a taboo', list: true },
         ],
     },
     {
@@ -313,8 +318,8 @@ export const SYSTEMS_CATEGORIES: CodexFieldCategory[] = [
         title: 'Rules',
         icon: 'list-checks',
         fields: [
-            { key: 'rules', label: 'Rules', placeholder: 'Core rules and mechanics', multiline: true },
-            { key: 'limitations', label: 'Limitations', placeholder: 'Costs, restrictions, exceptions', multiline: true },
+            { key: 'rules', label: 'Rules', placeholder: 'Add a rule', list: true },
+            { key: 'limitations', label: 'Limitations', placeholder: 'Add a limitation', list: true },
         ],
     },
     {

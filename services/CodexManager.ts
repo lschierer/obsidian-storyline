@@ -298,6 +298,29 @@ export class CodexManager {
         // Issue #71 — mirror to top-level YAML keys for templates that opt in
         mirrorUniversalFieldsToTopLevel(fm, entry.universalFields);
 
+        // Sync fields marked syncToAliases into the `aliases` frontmatter key
+        if (catDef) {
+            const syncAliases: string[] = [];
+            for (const cat of catDef.categories) {
+                for (const field of cat.fields) {
+                    if (!field.syncToAliases) continue;
+                    const val = entry[field.key];
+                    if (typeof val === 'string' && val) {
+                        syncAliases.push(val);
+                    } else if (Array.isArray(val)) {
+                        for (const v of val) {
+                            if (typeof v === 'string' && v) syncAliases.push(v);
+                        }
+                    }
+                }
+            }
+            if (syncAliases.length > 0) {
+                // Merge with existing aliases that weren't from sync fields
+                const existing = Array.isArray(fm.aliases) ? fm.aliases.filter((a: string) => !syncAliases.includes(a)) : [];
+                fm.aliases = [...existing, ...syncAliases];
+            }
+        }
+
         const finalBody = entry.notes ?? body;
         const newContent = `---\n${stringifyYaml(fm)}---\n${finalBody ? '\n' + finalBody : ''}`;
         await this.app.vault.modify(file, newContent);

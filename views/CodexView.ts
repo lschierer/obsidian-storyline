@@ -704,7 +704,44 @@ export class CodexView extends ItemView {
 
         const currentValue = draft[key] != null ? String(draft[key]) : '';
 
-        if (characterRef) {
+        if (field.list) {
+            // Render a list with add/remove UI
+            const items: string[] = Array.isArray(draft[key]) ? (draft[key] as string[]) : (currentValue ? [currentValue] : []);
+            const listContainer = row.createDiv('codex-field-list');
+            const renderItems = () => {
+                listContainer.empty();
+                items.forEach((item, idx) => {
+                    const itemRow = listContainer.createDiv('codex-field-list-item');
+                    const itemInput = itemRow.createEl('input', {
+                        cls: 'codex-field-input',
+                        attr: { type: 'text', value: item },
+                    });
+                    itemInput.addEventListener('input', () => {
+                        items[idx] = itemInput.value;
+                        draft[key] = [...items];
+                        this.scheduleSave(draft);
+                    });
+                    const removeBtn = itemRow.createEl('button', { cls: 'codex-list-remove-btn', text: '×' });
+                    removeBtn.addEventListener('click', () => {
+                        items.splice(idx, 1);
+                        draft[key] = [...items];
+                        this.scheduleSave(draft);
+                        renderItems();
+                    });
+                });
+                const addBtn = listContainer.createEl('button', { cls: 'codex-list-add-btn', text: `+ ${placeholder || 'Add item'}` });
+                addBtn.addEventListener('click', () => {
+                    items.push('');
+                    draft[key] = [...items];
+                    this.scheduleSave(draft);
+                    renderItems();
+                    // Focus the new input
+                    const inputs = listContainer.querySelectorAll<HTMLInputElement>('.codex-field-list-item input');
+                    if (inputs.length) inputs[inputs.length - 1].focus();
+                });
+            };
+            renderItems();
+        } else if (characterRef) {
             // Render a character dropdown
             const select = row.createEl('select', { cls: 'codex-field-input dropdown' });
             select.createEl('option', { text: placeholder || 'Select character…', value: '' });
