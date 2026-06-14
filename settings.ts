@@ -558,6 +558,8 @@ export interface SceneCardsSettings {
     lastBoardGroupBy: string;
     /** Remembered Timeline order from last session */
     timelineOrder: 'reading' | 'chronological';
+    /** Show inactive / parked scenes in the Timeline view. */
+    timelineShowInactive: boolean;
     autoOpenNavigator: boolean;
     showNotesInKanban: boolean;
     showScenesInCorkboard: boolean;
@@ -807,6 +809,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     lastBoardMode: 'corkboard',
     lastBoardGroupBy: 'act',
     timelineOrder: 'reading',
+    timelineShowInactive: false,
     autoOpenNavigator: true,
     showNotesInKanban: false,
     showScenesInCorkboard: true,

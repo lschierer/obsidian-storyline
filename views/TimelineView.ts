@@ -13,7 +13,7 @@ import { applyMobileClass } from '../components/MobileAdapter';
 import { attachTooltip } from '../components/Tooltip';
 import { ButtonComponent, DropdownComponent, ItemView, Menu, Modal, Notice, Setting, TFile, TextComponent, WorkspaceLeaf } from 'obsidian';
 import * as obsidian from 'obsidian';
-import { BUILTIN_BEAT_SHEETS, Scene, SceneStatus, TIMELINE_MODES, TIMELINE_MODE_ICONS, TIMELINE_MODE_LABELS, TimelineMode, getStatusOrder, resolveStatusCfg } from '../models/Scene';
+import { BUILTIN_BEAT_SHEETS, Scene, SceneFilter, SceneStatus, TIMELINE_MODES, TIMELINE_MODE_ICONS, TIMELINE_MODE_LABELS, TimelineMode, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 import { getActDisplayLabel } from '../utils/actChapter';
 
 /**
@@ -45,6 +45,8 @@ export class TimelineView extends ItemView {
     private swimlaneGroupBy: SwimlaneGroupBy = 'pov';
     /** Whether to sort by reading order (sequence) or chronological order */
     private timelineOrder: TimelineOrder = 'reading';
+    /** Whether to include inactive / parked scenes in the timeline */
+    private showInactive = false;
 
     constructor(leaf: WorkspaceLeaf, plugin: SceneCardsPlugin, sceneManager: SceneManager) {
         super(leaf);
@@ -69,6 +71,7 @@ export class TimelineView extends ItemView {
     async onOpen(): Promise<void> {
         this.plugin.storyLeaf = this.leaf;
         this.timelineOrder = this.plugin.settings.timelineOrder === 'chronological' ? 'chronological' : 'reading';
+        this.showInactive = this.plugin.settings.timelineShowInactive === true;
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
         container.addClass('story-line-timeline-container');
@@ -88,6 +91,15 @@ export class TimelineView extends ItemView {
         if (typeof value === 'string') return (value as string).trim().toLowerCase() === 'true';
         if (typeof value === 'number') return value === 1;
         return false;
+    }
+
+    /**
+     * Build the scene filter for the timeline. By default the query service
+     * excludes inactive / parked scenes; when the user toggles "Show inactive
+     * scenes" we request all scenes so parked ones appear in the timeline.
+     */
+    private sceneFilter(): SceneFilter | undefined {
+        return this.showInactive ? { activeState: 'all' } : undefined;
     }
 
     private renderView(container: HTMLElement): void {
@@ -127,6 +139,19 @@ export class TimelineView extends ItemView {
         attachTooltip(swimToggle, this.swimlaneMode ? 'Switch to linear' : 'Switch to swimlanes');
         swimToggle.addEventListener('click', () => {
             this.swimlaneMode = !this.swimlaneMode;
+            this.refresh();
+        });
+
+        // Show / hide inactive (parked) scenes
+        const inactiveToggle = controls.createEl('button', {
+            cls: `clickable-icon${this.showInactive ? ' is-active' : ''}`,
+        });
+        obsidian.setIcon(inactiveToggle, 'eye-off');
+        attachTooltip(inactiveToggle, this.showInactive ? 'Hide inactive scenes' : 'Show inactive scenes');
+        inactiveToggle.addEventListener('click', () => {
+            this.showInactive = !this.showInactive;
+            this.plugin.settings.timelineShowInactive = this.showInactive;
+            void this.plugin.saveSettings();
             this.refresh();
         });
 
@@ -251,7 +276,7 @@ export class TimelineView extends ItemView {
         const timelineEl = container.createDiv('story-line-timeline');
         const sortField = this.timelineOrder === 'chronological' ? 'chronologicalOrder' : 'chapter';
         const scenes = this.sceneManager.queryService.getFilteredScenes(
-            undefined,
+            this.sceneFilter(),
             { field: sortField, direction: 'asc' }
         ).filter(scene => !this.isNoteScene(scene));
 
@@ -560,7 +585,7 @@ export class TimelineView extends ItemView {
         enableDragToPan(timelineEl);
         const sortField = this.timelineOrder === 'chronological' ? 'chronologicalOrder' : 'chapter';
         const scenes = this.sceneManager.queryService.getFilteredScenes(
-            undefined,
+            this.sceneFilter(),
             { field: sortField, direction: 'asc' }
         ).filter(scene => !this.isNoteScene(scene));
 
