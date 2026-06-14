@@ -5,6 +5,7 @@ import { normalizeStoryLineLocale, resolveLocale, DEFAULT_STORYLINE_LOCALE, AUTO
 import { UndoManager } from './UndoManager';
 import { SceneQueryService, ISceneStore } from './SceneQueryService';
 import { formatActChapterPrefix, sanitizeActChapterForPath, compareActChapter } from '../utils/actChapter';
+import { MAX_FILENAME_TITLE_LENGTH } from '../constants';
 import type SceneCardsPlugin from '../main';
 import { App, Notice, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } from 'obsidian';
 import { BeatSheetTemplate, FilterPreset, Scene, SceneFilter, SceneStatus, SortConfig, getStatusOrder } from '../models/Scene';
@@ -775,8 +776,10 @@ export class SceneManager implements ISceneStore {
         const actStr = formatActChapterPrefix(sceneData.act, '00');
         const safeTitle = (sceneData.title || 'Untitled')
             .replace(/[\\/:*?"<>|]/g, '-')
-            .substring(0, 60);
-        const baseName = `${actStr}-${seqStr} ${safeTitle}`;
+            .substring(0, MAX_FILENAME_TITLE_LENGTH);
+        const baseName = this.plugin.settings.prefixSceneFilenames
+            ? `${actStr}-${seqStr} ${safeTitle}`
+            : safeTitle;
         // Issue #81: when auto-generate sequence is off (or the caller didn't
         // provide one), multiple new notes/scenes can collide on the same
         // "00-00 Untitled.md" filename. Append a numeric suffix to ensure
@@ -933,12 +936,15 @@ export class SceneManager implements ISceneStore {
     private getSceneSafeTitle(title: string | undefined): string {
         return (title || 'Untitled')
             .replace(/[\\/:*?"<>|]/g, '-')
-            .substring(0, 60)
+            .substring(0, MAX_FILENAME_TITLE_LENGTH)
             .trim() || 'Untitled';
     }
 
     private getSceneFileNameForMetadata(scene: Scene, currentFile: TFile): string {
         const safeTitle = this.getSceneSafeTitle(scene.title);
+        if (!this.plugin.settings.prefixSceneFilenames) {
+            return `${safeTitle}.md`;
+        }
         const hasPrefix = /^([^\s/-]+)-(\d+(?:\.\d+)?)\s/.test(currentFile.name);
         if (hasPrefix || scene.sequence !== undefined || scene.act !== undefined) {
             const actStr = formatActChapterPrefix(scene.act, '00');
@@ -1774,7 +1780,7 @@ export class SceneManager implements ISceneStore {
     private getSceneNotesBaseName(scene: Scene): string {
         const safeTitle = (scene.title || 'Untitled')
             .replace(/[\\/:*?"<>|]/g, '-')
-            .substring(0, 52)
+            .substring(0, MAX_FILENAME_TITLE_LENGTH)
             .trim() || 'Untitled';
         return `${safeTitle} - Notes`;
     }

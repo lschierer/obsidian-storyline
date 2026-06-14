@@ -321,9 +321,13 @@ export class MetadataParser {
             }
         }
 
+        // Emit the subtitle into the document body so it lives in the file
+        // itself (the title is the filename / inline title, so the subtitle
+        // sits just beneath it as an italic line).
         const body = scene.body || '';
+        const subtitleLine = scene.subtitle ? `*${scene.subtitle}*\n\n` : '';
 
-        return `---\n${stringifyYaml(fm)}---\n\n${body}`;
+        return `---\n${stringifyYaml(fm)}---\n\n${subtitleLine}${body}`;
     }
 
     /**

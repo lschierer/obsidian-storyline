@@ -21,4 +21,12 @@ export const RESEARCH_VIEW_TYPE = 'story-line-research';
 export const NOTES_VIEW_TYPE = 'story-line-notes';
 export const SYNOPSIS_VIEW_TYPE = 'story-line-synopsis';
 export const DETAILS_VIEW_TYPE = 'story-line-scene-details';
+
+/**
+ * Maximum number of title characters used when building a scene's filename.
+ * Filenames also carry a prefix and/or " - Notes" suffix plus the ".md"
+ * extension, so this stays comfortably under the common 255-byte OS limit
+ * while no longer chopping realistic scene titles.
+ */
+export const MAX_FILENAME_TITLE_LENGTH = 200;
 /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars, no-unused-vars, no-useless-escape, no-control-regex, no-empty -- end of file-wide suppression block opened at line 1 */

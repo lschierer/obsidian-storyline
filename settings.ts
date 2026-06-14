@@ -543,6 +543,8 @@ export interface SceneCardsSettings {
     // Scene defaults
     defaultStatus: SceneStatus;
     autoGenerateSequence: boolean;
+    /** Prepend an "act-sequence " prefix (e.g. "01-02 ") to scene filenames. */
+    prefixSceneFilenames: boolean;
     defaultTargetWordCount: number;
     /** User-defined custom statuses appended after the built-in six */
     customStatuses: CustomStatusDef[];
@@ -796,6 +798,7 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
 
     defaultStatus: 'idea',
     autoGenerateSequence: true,
+    prefixSceneFilenames: true,
     defaultTargetWordCount: 800,
     customStatuses: [],
 
@@ -999,6 +1002,16 @@ export class SceneCardsSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.autoGenerateSequence)
                 .onChange(async (value) => {
                     this.plugin.settings.autoGenerateSequence = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Prefix scene filenames with act/sequence')
+            .setDesc('When on, scene files are named like "01-02 The Title.md". When off, the filename is just the title. Turning this off stops the prefix from churning when you reorder scenes, but the file explorer will then sort scenes alphabetically rather than by act/sequence.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.prefixSceneFilenames)
+                .onChange(async (value) => {
+                    this.plugin.settings.prefixSceneFilenames = value;
                     await this.plugin.saveSettings();
                 }));
 
