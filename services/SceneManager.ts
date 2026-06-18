@@ -869,6 +869,13 @@ export class SceneManager implements ISceneStore {
             currentPath = await this.syncSceneFileName(currentPath);
         }
 
+        // A title change must also follow through to the scene's external
+        // notes file, which is named "<title> - Notes.md". Without this the
+        // notes file keeps its old name and the notesFile pointer goes stale.
+        if (updates.title !== undefined && oldSnap && updates.title !== oldSnap.title) {
+            await this.syncSceneNotesFileName(currentPath, oldSnap.title);
+        }
+
         return currentPath;
     }
 
@@ -1778,7 +1785,11 @@ export class SceneManager implements ISceneStore {
     }
 
     private getSceneNotesBaseName(scene: Scene): string {
-        const safeTitle = (scene.title || 'Untitled')
+        return this.notesBaseNameForTitle(scene.title);
+    }
+
+    private notesBaseNameForTitle(title: string | undefined): string {
+        const safeTitle = (title || 'Untitled')
             .replace(/[\\/:*?"<>|]/g, '-')
             .substring(0, MAX_FILENAME_TITLE_LENGTH)
             .trim() || 'Untitled';
@@ -1822,6 +1833,36 @@ export class SceneManager implements ISceneStore {
         await this.updateScene(scene.filePath, { notesFile: targetPath });
         scene.notesFile = targetPath;
         return targetPath;
+    }
+
+    /**
+     * When a scene's title changes, rename its external notes file so the
+     * "<title> - Notes.md" file and the notesFile reference follow the rename.
+     * Only auto-named notes are renamed — a notes file the user named by hand
+     * (i.e. whose basename doesn't match the *old* title's generated name) is
+     * left alone so we never clobber a deliberate name.
+     */
+    private async syncSceneNotesFileName(filePath: string, oldTitle: string | undefined): Promise<void> {
+        const scene = this.scenes.get(filePath);
+        if (!scene || !scene.notesFile) return;
+        const file = this.app.vault.getAbstractFileByPath(scene.notesFile);
+        if (!file || !(file instanceof TFile)) return;
+
+        // Only follow the rename if the notes file still carries the name we
+        // would have generated from the previous title (optionally with a
+        // " (n)" dedupe suffix).
+        const oldBase = this.notesBaseNameForTitle(oldTitle);
+        const escaped = oldBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const isAutoNamed = file.basename === oldBase
+            || new RegExp(`^${escaped} \\(\\d+\\)$`).test(file.basename);
+        if (!isAutoNamed) return;
+
+        const targetPath = this.getUniqueSceneNotesPath(scene, file.path);
+        if (normalizePath(targetPath) === normalizePath(file.path)) return;
+
+        await this.app.fileManager.renameFile(file, targetPath);
+        await this.updateScene(scene.filePath, { notesFile: targetPath });
+        scene.notesFile = targetPath;
     }
 
     /**
