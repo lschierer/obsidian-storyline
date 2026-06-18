@@ -53,6 +53,10 @@ export class TimelineView extends ItemView {
         this.plugin = plugin;
         this.sceneManager = sceneManager;
         this.cardComponent = new SceneCardComponent(plugin);
+        // Restore persisted filter states from settings
+        this.timelineOrder = plugin.settings.timelineOrder === 'chronological' ? 'chronological' : 'reading';
+        this.swimlaneMode = plugin.settings.timelineSwimlaneMode ?? false;
+        this.swimlaneGroupBy = (plugin.settings.timelineSwimlaneGroupBy as SwimlaneGroupBy) ?? 'pov';
     }
 
     getViewType(): string {
@@ -139,6 +143,8 @@ export class TimelineView extends ItemView {
         attachTooltip(swimToggle, this.swimlaneMode ? 'Switch to linear' : 'Switch to swimlanes');
         swimToggle.addEventListener('click', () => {
             this.swimlaneMode = !this.swimlaneMode;
+            this.plugin.settings.timelineSwimlaneMode = this.swimlaneMode;
+            void this.plugin.saveSettings();
             this.refresh();
         });
 
@@ -198,6 +204,8 @@ export class TimelineView extends ItemView {
             }
             groupSelect.addEventListener('change', () => {
                 this.swimlaneGroupBy = groupSelect.value as SwimlaneGroupBy;
+                this.plugin.settings.timelineSwimlaneGroupBy = this.swimlaneGroupBy;
+                void this.plugin.saveSettings();
                 this.refresh();
             });
         }
@@ -1725,8 +1733,19 @@ export class TimelineView extends ItemView {
             this._pendingRefresh = null;
             if (!this.rootContainer) return;
             this._lastCacheVersion = this.sceneManager.cacheVersion;
+            // Save scroll position before re-render
+            const scrollEl = this.rootContainer.querySelector('.story-line-main-area');
+            const savedScroll = scrollEl ? { top: scrollEl.scrollTop, left: scrollEl.left } : null;
             const prevSelectedPath = this.selectedScene?.filePath ?? null;
             this.renderView(this.rootContainer);
+            // Restore scroll position after re-render
+            if (savedScroll) {
+                const newScrollEl = this.rootContainer.querySelector('.story-line-main-area');
+                if (newScrollEl) {
+                    newScrollEl.scrollTop = savedScroll.top;
+                    newScrollEl.scrollLeft = savedScroll.left;
+                }
+            }
             if (prevSelectedPath) {
                 const updated = this.sceneManager.getScene(prevSelectedPath);
                 if (updated) {

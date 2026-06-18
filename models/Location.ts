@@ -35,6 +35,8 @@ interface LocationBase {
     custom?: Record<string, string>;
     /** Universal field values (keyed by template id) */
     universalFields?: Record<string, string | string[]>;
+    /** Alternative names / aliases (comma-separated) — used by LinkScanner for plain-text matching */
+    nickname?: string;
     /**
      * Which books (project titles) this entity appears in. Empty / missing
      * means the entity is shared by every book in the series. Used by the
@@ -140,6 +142,7 @@ export const WORLD_CATEGORIES: LocationFieldCategory[] = [
         icon: 'globe',
         fields: [
             { key: 'name', label: 'Name', placeholder: 'Name of the world or setting' },
+            { key: 'nickname', label: 'Nickname / Alias', placeholder: 'Alternative names (comma-separated)', multiline: true },
             { key: 'description', label: 'Description', placeholder: 'General overview of this world', multiline: true },
         ],
     },
@@ -201,6 +204,7 @@ export const LOCATION_CATEGORIES: LocationFieldCategory[] = [
         icon: 'map-pin',
         fields: [
             { key: 'name', label: 'Name', placeholder: 'Name of this location' },
+            { key: 'nickname', label: 'Nickname / Alias', placeholder: 'Alternative names (comma-separated)', multiline: true },
             { key: 'locationType', label: 'Type', placeholder: 'City, building, wilderness, room…' },
             { key: 'description', label: 'Description', placeholder: 'Sights, sounds, smells — what does it feel like?', multiline: true },
         ],
@@ -261,14 +265,14 @@ export const LOCATION_TYPES: string[] = [
 
 /** Frontmatter keys for World */
 export const WORLD_FIELD_KEYS: (keyof StoryWorld)[] = [
-    'name', 'image', 'gallery', 'description', 'geography', 'culture', 'politics',
+    'name', 'image', 'gallery', 'nickname', 'description', 'geography', 'culture', 'politics',
     'magicTechnology', 'beliefs', 'economy', 'history',
     'books',
 ];
 
 /** Frontmatter keys for Location */
 export const LOCATION_FIELD_KEYS: (keyof StoryLocation)[] = [
-    'name', 'image', 'gallery', 'locationType', 'world', 'parent', 'description',
+    'name', 'image', 'gallery', 'nickname', 'locationType', 'world', 'parent', 'description',
     'atmosphere', 'significance', 'inhabitants', 'connectedLocations', 'mapNotes',
     'books',
 ];

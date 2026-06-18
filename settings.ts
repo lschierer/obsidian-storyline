@@ -560,6 +560,14 @@ export interface SceneCardsSettings {
     timelineOrder: 'reading' | 'chronological';
     /** Show inactive / parked scenes in the Timeline view. */
     timelineShowInactive: boolean;
+    /** Remembered Timeline swimlane mode from last session */
+    timelineSwimlaneMode: boolean;
+    /** Remembered Timeline swimlane group-by from last session */
+    timelineSwimlaneGroupBy: string;
+    /** Remembered Research view active tag filter */
+    researchActiveTag: string | null;
+    /** Remembered Research view active type filter */
+    researchActiveType: string | null;
     autoOpenNavigator: boolean;
     showNotesInKanban: boolean;
     showScenesInCorkboard: boolean;
@@ -810,6 +818,10 @@ export const DEFAULT_SETTINGS: SceneCardsSettings = {
     lastBoardGroupBy: 'act',
     timelineOrder: 'reading',
     timelineShowInactive: false,
+    timelineSwimlaneMode: false,
+    timelineSwimlaneGroupBy: 'pov',
+    researchActiveTag: null,
+    researchActiveType: null,
     autoOpenNavigator: true,
     showNotesInKanban: false,
     showScenesInCorkboard: true,
@@ -1712,7 +1724,6 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             .addSlider(slider => slider
                 .setLimits(1, 30, 1)
                 .setValue(this.plugin.settings.timelineDragScrollSpeed)
-                .setDynamicTooltip()
                 .onChange(async (value) => {
                     this.plugin.settings.timelineDragScrollSpeed = value;
                     await this.plugin.saveSettings();
@@ -1725,7 +1736,6 @@ export class SceneCardsSettingTab extends PluginSettingTab {
             .addSlider(slider => slider
                 .setLimits(20, 200, 10)
                 .setValue(this.plugin.settings.timelineDragScrollZone)
-                .setDynamicTooltip()
                 .onChange(async (value) => {
                     this.plugin.settings.timelineDragScrollZone = value;
                     await this.plugin.saveSettings();

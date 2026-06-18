@@ -52,6 +52,9 @@ export class PlotgridView extends ItemView {
     private filtersComponent: FiltersComponent | null = null;
     private currentFilter: SceneFilter = {};
     private currentSort: SortConfig = { field: 'sequence', direction: 'asc' };
+    /** Simple undo stack for plot grid cell operations */
+    private undoStack: PlotGridData[] = [];
+    private static readonly MAX_UNDO = 20;
 
     constructor(leaf: WorkspaceLeaf, plugin?: SceneCardsPlugin) {
         super(leaf);
@@ -215,6 +218,36 @@ export class PlotgridView extends ItemView {
             if (this.saveDebounce === timerId) this.saveDebounce = null;
         }, 500);
         this.saveDebounce = timerId;
+    }
+
+    /** Push a deep clone of the current grid data onto the undo stack. */
+    private pushPlotGridUndo(): void {
+        const snapshot: PlotGridData = {
+            rows: this.data.rows.map(r => ({ ...r })),
+            columns: this.data.columns.map(c => ({ ...c })),
+            cells: {},
+            zoom: this.data.zoom,
+            stickyHeaders: this.data.stickyHeaders,
+        };
+        for (const [k, v] of Object.entries(this.data.cells)) {
+            snapshot.cells[k] = { ...v };
+        }
+        this.undoStack.push(snapshot);
+        if (this.undoStack.length > PlotgridView.MAX_UNDO) {
+            this.undoStack.shift();
+        }
+    }
+
+    /** Pop the last undo snapshot and restore it. */
+    undoPlotGridMove(): void {
+        if (this.undoStack.length === 0) {
+            new Notice('Nothing to undo on the plot grid.');
+            return;
+        }
+        this.data = this.undoStack.pop()!;
+        this.scheduleSave();
+        this.renderGrid();
+        new Notice('Plot grid move undone.');
     }
 
     private buildLayout(container: HTMLElement) {
@@ -1590,14 +1623,29 @@ export class PlotgridView extends ItemView {
                         const src = this.data.cells[sourceKey];
                         const tgt = this.data.cells[key];
                         if (src && tgt) {
-                            tgt.linkedSceneId = src.linkedSceneId;
-                            tgt.content = src.content;
-                            tgt.manualContent = src.manualContent;
-                            src.linkedSceneId = undefined;
-                            src.content = '';
-                            src.manualContent = undefined;
-                            this.scheduleSave();
-                            this.renderGrid();
+                            const targetHasContent = tgt.linkedSceneId || tgt.content || tgt.manualContent;
+                            const doMove = () => {
+                                // Snapshot cells for undo before modifying
+                                this.pushPlotGridUndo();
+                                tgt.linkedSceneId = src.linkedSceneId;
+                                tgt.content = src.content;
+                                tgt.manualContent = src.manualContent;
+                                src.linkedSceneId = undefined;
+                                src.content = '';
+                                src.manualContent = undefined;
+                                this.scheduleSave();
+                                this.renderGrid();
+                            };
+                            if (targetHasContent) {
+                                openConfirmModal(this.app, {
+                                    title: 'Overwrite Cell',
+                                    message: 'The target cell already has content. Overwrite it?',
+                                    confirmLabel: 'Overwrite',
+                                    onConfirm: doMove,
+                                });
+                            } else {
+                                doMove();
+                            }
                         }
                     } else if (scenePath) {
                         // External scene drop (e.g., from scene list)

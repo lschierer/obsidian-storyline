@@ -6,6 +6,31 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.29
+
+- Updated to use the latest Obsidian API conventions (replaced deprecated `document`, `instanceof`, `activeLeaf`, and `setDynamicTooltip` calls) for better compatibility with popout windows and future Obsidian versions.
+
+---
+
+## Version 1.10.28
+
+### New Features
+
+- **Location & world nicknames** — You can now add alternative names (nicknames/aliases) to locations and worlds, just like characters. The Link Scanner picks them up automatically, so writing a nickname in your prose will link to the right place.
+- **Ctrl+Z / Ctrl+Y in StoryLine views** — Pressing Ctrl+Z (or Cmd+Z on Mac) now triggers StoryLine's own undo when a StoryLine view is active and you're not typing in a text field. No more accidentally undoing your vault files.
+- **Plot Grid drag confirmation** — Dragging a cell onto another cell that already has content now asks for confirmation before overwriting. Cell moves can also be undone.
+- **Filter states remembered** — Timeline swimlane mode, swimlane group-by, and Research panel tag/type filters are now saved between sessions.
+
+### Bug Fixes
+
+- **Location type dropdown** — Adding a custom location type no longer makes the Type field disappear. The new type is saved immediately before the view refreshes.
+- **Research tag chips** — Clicking a tag chip in the Research panel no longer creates duplicate chips.
+- **Research linked notes** — Linking a vault note to the Research panel no longer overwrites previously linked notes.
+- **Timeline scroll position** — Selecting a scene in the Timeline no longer scrolls you back to the top.
+- **Timeline date column** — The date column is wider and long weekday names now wrap instead of being cut off.
+
+---
+
 ## Version 1.10.27
 
 ### New Features

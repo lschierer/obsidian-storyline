@@ -38,6 +38,9 @@ export class ResearchView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.manager = manager;
+        // Restore persisted filter states
+        this.activeTag = plugin.settings.researchActiveTag ?? null;
+        this.activeType = (plugin.settings.researchActiveType as ResearchType | null) ?? null;
     }
 
     getViewType(): string { return RESEARCH_VIEW_TYPE; }
@@ -80,6 +83,7 @@ export class ResearchView extends ItemView {
     private render(): void {
         if (!this.rootEl) return;
         const container = this.rootEl;
+        container.empty();
 
         // ── Header ──
         const header = container.createDiv('sl-research-header');
@@ -142,20 +146,9 @@ export class ResearchView extends ItemView {
                 });
                 chip.addEventListener('click', () => {
                     this.activeTag = this.activeTag === tag ? null : tag;
-                    this.renderResults(resultContainer);
-                    // Re-render tag chips to update active state
-                    tagRow.empty();
-                    for (const t of allTags) {
-                        const c = tagRow.createSpan({
-                            cls: `sl-research-tag-chip ${this.activeTag === t ? 'is-active' : ''}`,
-                            text: `#${t}`,
-                        });
-                        c.addEventListener('click', () => {
-                            this.activeTag = this.activeTag === t ? null : t;
-                            this.renderResults(resultContainer);
-                            this.render(); // full re-render to update chip states
-                        });
-                    }
+                    this.plugin.settings.researchActiveTag = this.activeTag;
+                    void this.plugin.saveSettings();
+                    this.render();
                 });
             }
         }
@@ -173,6 +166,8 @@ export class ResearchView extends ItemView {
             attachTooltip(btn, label);
             btn.addEventListener('click', () => {
                 this.activeType = t;
+                this.plugin.settings.researchActiveType = this.activeType;
+                void this.plugin.saveSettings();
                 this.renderResults(resultContainer);
                 typeRow.querySelectorAll('.sl-research-type-btn').forEach((el, i) => {
                     el.toggleClass('is-active', types[i] === t);

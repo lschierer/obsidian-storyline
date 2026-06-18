@@ -14,6 +14,8 @@ export class ResearchManager {
     private posts = new Map<string, ResearchPost>();
     /** Vault paths of linked notes (stored in .links.json) */
     private linkedPaths = new Set<string>();
+    /** Whether linkedPaths has been loaded from disk at least once */
+    private linksLoaded = false;
 
     constructor(
         private app: App,
@@ -274,6 +276,7 @@ export class ResearchManager {
     /** Read the .links.json manifest from the Research/ folder. */
     private async loadLinks(): Promise<void> {
         this.linkedPaths.clear();
+        this.linksLoaded = true;
         const folder = this.getResearchFolder();
         if (!folder) return;
         const linksPath = normalizePath(`${folder}/.links.json`);
@@ -350,6 +353,10 @@ export class ResearchManager {
 
     /** Link an existing vault note to the Research panel. */
     async linkNote(vaultPath: string): Promise<void> {
+        // Ensure linkedPaths is loaded from disk before modifying
+        if (!this.linksLoaded) {
+            await this.loadLinks();
+        }
         this.linkedPaths.add(vaultPath);
         await this.saveLinks();
         // Index it immediately
@@ -362,6 +369,9 @@ export class ResearchManager {
 
     /** Unlink a note from the Research panel (does not delete the file). */
     async unlinkNote(vaultPath: string): Promise<void> {
+        if (!this.linksLoaded) {
+            await this.loadLinks();
+        }
         this.linkedPaths.delete(vaultPath);
         this.posts.delete(vaultPath);
         await this.saveLinks();

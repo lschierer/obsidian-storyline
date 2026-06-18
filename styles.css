@@ -1357,7 +1357,8 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     padding: 1px 6px;
     margin-bottom: 2px;
     margin-right: 2px;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
 }
 .timeline-time-badge {
     font-family: var(--font-monospace);
@@ -2239,7 +2240,7 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 
 /* Left: sequence badge + date/time */
 .timeline-entry-seq {
-    width: 80px;
+    width: 100px;
     display: flex;
     flex-direction: column;
     align-items: flex-end;

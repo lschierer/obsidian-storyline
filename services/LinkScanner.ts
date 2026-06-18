@@ -195,10 +195,24 @@ export class LinkScanner {
 
         for (const l of this.locationManager.getAllLocations()) {
             this.locNames.add(l.name.toLowerCase());
+            // Support comma-separated nicknames for locations
+            if (l.nickname) {
+                const nicks = String(l.nickname).split(',').map(n => n.trim()).filter(Boolean);
+                for (const nick of nicks) {
+                    this.locNames.add(nick.toLowerCase());
+                }
+            }
         }
         // Also include worlds
         for (const w of this.locationManager.getAllWorlds()) {
             this.locNames.add(w.name.toLowerCase());
+            // Support comma-separated nicknames for worlds
+            if (w.nickname) {
+                const nicks = String(w.nickname).split(',').map(n => n.trim()).filter(Boolean);
+                for (const nick of nicks) {
+                    this.locNames.add(nick.toLowerCase());
+                }
+            }
         }
 
         // Codex entry names
@@ -209,6 +223,17 @@ export class LinkScanner {
                 // Don't add if already a character or location name
                 if (!this.charNames.has(lower) && !this.locNames.has(lower)) {
                     this.codexNames.add(lower);
+                }
+                // Support comma-separated nicknames for codex entries
+                const nick = (entry as unknown as Record<string, unknown>).nickname;
+                if (nick && typeof nick === 'string') {
+                    const nicks = String(nick).split(',').map(n => n.trim()).filter(Boolean);
+                    for (const n of nicks) {
+                        const nLower = n.toLowerCase();
+                        if (!this.charNames.has(nLower) && !this.locNames.has(nLower)) {
+                            this.codexNames.add(nLower);
+                        }
+                    }
                 }
             }
         }

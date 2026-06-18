@@ -894,7 +894,7 @@ export class LocationView extends ItemView {
                             await this.plugin.saveSettings();
                         }
                         (draft as unknown as Record<string, unknown>)[field.key] = name.toLowerCase();
-                        this.scheduleSave(draft);
+                        await this.flushSave();
                         if (this.rootContainer) this.renderDetail(this.rootContainer);
                     } else {
                         // Re-select the previous value
@@ -1544,6 +1544,7 @@ export class LocationView extends ItemView {
      */
     private promptCustomLocationType(): Promise<string | null> {
         return new Promise(resolve => {
+            let resolved = false;
             const modal = new Modal(this.app);
             modal.titleEl.setText('Add custom location type');
             let name = '';
@@ -1559,6 +1560,7 @@ export class LocationView extends ItemView {
                             e.preventDefault();
                             const trimmed = name.trim();
                             if (trimmed) {
+                                resolved = true;
                                 modal.close();
                                 resolve(trimmed);
                             }
@@ -1573,17 +1575,21 @@ export class LocationView extends ItemView {
                             new Notice('Please enter a type name.');
                             return;
                         }
+                        resolved = true;
                         modal.close();
                         resolve(trimmed);
                     });
                 })
                 .addButton((btn: ButtonComponent) => {
                     btn.setButtonText('Cancel').onClick(() => {
+                        resolved = true;
                         modal.close();
                         resolve(null);
                     });
                 });
-            modal.onClose = () => resolve(null);
+            modal.onClose = () => {
+                if (!resolved) resolve(null);
+            };
             modal.open();
         });
     }
@@ -1616,6 +1622,40 @@ export class LocationView extends ItemView {
                 console.error('StoryLine: failed to save location/world', e);
             }
         }, 600);
+    }
+
+    /** Immediately flush any pending debounced save so the manager's data is
+     *  up-to-date before a full re-render. */
+    private async flushSave(): Promise<void> {
+        if (this.autoSaveTimer !== null) {
+            window.clearTimeout(this.autoSaveTimer);
+            this.autoSaveTimer = null;
+        }
+        if (this.pendingSaveDraft) {
+            const draft = this.pendingSaveDraft;
+            this.pendingSaveDraft = null;
+            try {
+                const undoMgr = this.plugin.sceneManager?.undoManager;
+                if (undoMgr && this.undoSnapshot) {
+                    undoMgr.recordUpdate(
+                        draft.filePath,
+                        this.undoSnapshot as unknown as unknown as Record<string, unknown>,
+                        draft as unknown as unknown as Record<string, unknown>,
+                        `Update ${draft.type} "${draft.name}"`,
+                        'location'
+                    );
+                    this.undoSnapshot = { ...draft, custom: { ...(draft.custom || {}) } };
+                }
+                this._lastSaveTime = Date.now();
+                if (draft.type === 'world') {
+                    await this.locationManager.saveWorld(draft as StoryWorld);
+                } else {
+                    await this.locationManager.saveLocation(draft as StoryLocation);
+                }
+            } catch (e) {
+                console.error('StoryLine: failed to flush-save location/world', e);
+            }
+        }
     }
 
     /**

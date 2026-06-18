@@ -187,6 +187,7 @@ A spreadsheet-like grid for detailed scene planning.
 - **Auto-Note** — When the Auto-Note toggle is on (enabled by default), typing text into an empty, unlinked cell automatically creates a corkboard note and links it back to the cell. The note is saved as an *idea* with a `plotgridOrigin` label built from the row and column names, so you can always trace it back to where it started. Toggle Auto-Note on or off with the sticky-note icon in the Plotgrid toolbar — the icon turns accent-colored when active.
 - **Codex entity tags** — Each cell automatically displays small color-coded pills at the bottom showing characters (blue), locations (green), and codex entries (purple) detected in the cell text and/or the linked scene's prose. Entity detection uses the same LinkScanner engine — no manual tagging needed.
 - **Sync from Scenes** — Click the sync button in the toolbar to auto-populate the grid. Choose a column source: Characters, Plotlines (tags), Locations, or any Codex category enabled for the Inspector. Rows are created from scenes (sorted by act → chapter → sequence) and cells are filled where data exists. Manual edits are preserved in merge mode. Click a Codex column header to open the linked entry file.
+- **Drag with confirmation** — Dragging a cell onto another cell that already has content asks for confirmation before overwriting. Cell-to-cell moves can be undone with `Ctrl+Z`.
 
 ### Timeline View
 
@@ -300,6 +301,7 @@ A hierarchical worldbuilding and location management system. Locations are acces
 #### Detail Editor
 - **World profiles** have eight collapsible sections: Overview, Geography & Environment, Culture & Society, Politics & Power, Magic & Technology, Beliefs & Mythology, Economy & Trade, History & Lore.
 - **Location profiles** have five sections: Overview, Atmosphere & Description, Story Significance, Connected Locations, and a Hierarchy section with World and Parent dropdowns.
+- **Nicknames / Aliases** — Both worlds and locations now support a **Nickname / Alias** field (comma-separated). The Link Scanner uses these to match alternative names in your prose, so writing "The Citadel" will link to a location whose nickname includes it.
 - **Portrait area** — rectangular portrait (120×80 px) at the top of the detail editor. Click to add or change the image.
 - **Image gallery** — add up to 10 images with captions. Browse via carousel or open in a floating lightbox. See [Image Galleries](#image-galleries).
 - **Image picker** — import from computer (saved into `<Project>/Images/` with automatic dedup), choose from vault, or remove.
@@ -451,8 +453,8 @@ A right-sidebar panel for collecting and browsing research material alongside yo
 #### Features
 
 - **Search** - type in the search box to filter posts by title, body text, and tags.
-- **Tag filter** - click any tag chip to filter results to that tag. Click again to clear.
-- **Type filter** - filter by post type (Note, Web Clip, Image, Question) or show all.
+- **Tag filter** - click any tag chip to filter results to that tag. Click again to clear. Your selection is remembered between sessions.
+- **Type filter** - filter by post type (Note, Web Clip, Image, Question) or show all. Your selection is remembered between sessions.
 - **Auto-suggest** - click the sparkle button to switch to auto-suggest mode. The panel surfaces research posts relevant to the active scene's characters, location, and tags.
 - **Open question badge** - shows a red badge with the count of unresolved questions.
 - **Inline detail** - click a card to expand it and read the full content, source URL, and action buttons.
@@ -677,7 +679,9 @@ Each warning has a **severity level**:
 StoryLine tracks changes to scenes (create, update, delete) and lets you undo/redo:
 
 - **Undo:** `Ctrl+Z` (or command palette: *Undo Last Scene Change*)
-- **Redo:** `Ctrl+Shift+Z` (or command palette: *Redo Last Scene Change*)
+- **Redo:** `Ctrl+Shift+Z` / `Ctrl+Y` (or command palette: *Redo Last Scene Change*)
+
+When a StoryLine view is active and you're not typing in a text field, `Ctrl+Z` and `Ctrl+Y` automatically route to StoryLine's undo/redo instead of Obsidian's editor undo.
 
 The undo stack stores up to 50 actions and persists within the current session.
 
@@ -1214,8 +1218,8 @@ StoryLine includes a **Link Scanner** that automatically extracts `[[wikilinks]]
 1. The scanner extracts all `[[wikilinks]]` from each scene's Markdown body (below the frontmatter).
 2. Each link is classified against your project's characters, locations, and codex entries:
    - If the link matches a character name or nickname → **character**
-   - If the link matches a location name → **location**
-   - If the link matches a codex entry name → **codex** (with its category)
+   - If the link matches a location name or nickname → **location**
+   - If the link matches a codex entry name or nickname → **codex** (with its category)
    - Otherwise → **other** (unclassified)
 
 ### Where Links Appear
