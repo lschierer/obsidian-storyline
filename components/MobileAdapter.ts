@@ -42,11 +42,12 @@ export const DESKTOP_ONLY_VIEWS: Set<string> = new Set([
 
 /**
  * Character sub-modes that are desktop-only.
- * Grid mode works on mobile; Map and StoryGraph don't.
+ * Grid mode works on mobile; Map, StoryGraph and Family Tree don't.
  */
 export const DESKTOP_ONLY_CHARACTER_MODES: Set<string> = new Set([
     'map',
     'story-graph',
+    'family-tree',
 ]);
 
 // ── Helpers ───────────────────────────────────────────

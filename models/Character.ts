@@ -22,6 +22,9 @@ export interface Character {
     nickname?: string;
     /** Age or date of birth */
     age?: string;
+    /** Birthday (ISO date or year, e.g. 1981-08-01). Used to order siblings
+     *  oldest→youngest in the Family Tree view and to place spouses. */
+    birthday?: string;
     /** Role in the story (string or list of roles — issue #72 Tier 1) */
     role?: string | string[];
     /**

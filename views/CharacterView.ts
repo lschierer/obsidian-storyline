@@ -5,6 +5,7 @@ import { CharacterManager } from '../services/CharacterManager';
 import { renderViewSwitcher } from '../components/ViewSwitcher';
 import { RelationshipMap } from '../components/RelationshipMap';
 import { StoryGraph } from '../components/StoryGraph';
+import { FamilyTree } from '../components/FamilyTree';
 import { pickImage as pickImageModal, resolveImagePath } from '../components/ImagePicker';
 import { isMobile, DESKTOP_ONLY_CHARACTER_MODES, applyMobileClass } from '../components/MobileAdapter';
 import { RenameConfirmModal } from '../components/RenameConfirmModal';
@@ -49,12 +50,14 @@ export class CharacterView extends ItemView {
     /** Timestamp of last self-initiated save; used to suppress external refresh that would steal focus */
     private _lastSaveTime = 0;
     private static readonly SAVE_REFRESH_GRACE_MS = 2000;
-    /** Current sub-mode: 'grid' (default), 'map' (relationship map), or 'story-graph' */
-    private viewMode: 'grid' | 'map' | 'story-graph' = 'grid';
+    /** Current sub-mode: 'grid' (default), 'map' (relationship map), 'story-graph', or 'family-tree' */
+    private viewMode: 'grid' | 'map' | 'story-graph' | 'family-tree' = 'grid';
     /** Active RelationshipMap instance (cleaned up on re-render) */
     private relationshipMap: RelationshipMap | null = null;
     /** Active StoryGraph instance (cleaned up on re-render) */
     private storyGraph: StoryGraph | null = null;
+    /** Active FamilyTree instance (cleaned up on re-render) */
+    private familyTree: FamilyTree | null = null;
     /** Original name when the detail view was opened — used for cascade rename detection */
     private originalCharacterName: string | null = null;
     /** Last-saved relations snapshot — used to diff for reciprocal sync */
@@ -186,6 +189,19 @@ export class CharacterView extends ItemView {
                     if (this.rootContainer) this.renderView(this.rootContainer);
                 }
             });
+
+            const treeBtn = modeToggle.createEl('button', {
+                cls: `character-mode-btn ${this.viewMode === 'family-tree' ? 'active' : ''}`,
+            });
+            const treeIcon = treeBtn.createSpan();
+            obsidian.setIcon(treeIcon, 'git-fork');
+            treeBtn.createSpan({ text: ' Family Tree' });
+            treeBtn.addEventListener('click', () => {
+                if (this.viewMode !== 'family-tree') {
+                    this.viewMode = 'family-tree';
+                    if (this.rootContainer) this.renderView(this.rootContainer);
+                }
+            });
             } // end if (!isMobile)
         }
 
@@ -211,6 +227,10 @@ export class CharacterView extends ItemView {
             this.storyGraph.destroy();
             this.storyGraph = null;
         }
+        if (this.familyTree) {
+            this.familyTree.destroy();
+            this.familyTree = null;
+        }
 
         if (this.selectedCharacter) {
             this.renderCharacterDetail(content);
@@ -218,6 +238,8 @@ export class CharacterView extends ItemView {
             this.renderRelationshipMap(content);
         } else if (this.viewMode === 'story-graph') {
             this.renderStoryGraph(content);
+        } else if (this.viewMode === 'family-tree') {
+            this.renderFamilyTree(content);
         } else {
             this.renderCharacterOverview(content);
         }
@@ -771,6 +793,30 @@ export class CharacterView extends ItemView {
             this.plugin.settings.tagTypeOverrides,
         );
         this.storyGraph.render();
+    }
+
+    // ── Family Tree ────────────────────────────────────
+
+    private renderFamilyTree(container: HTMLElement): void {
+        container.empty();
+        const characters = this.characterManager.getAllCharacters();
+        const treeContainer = container.createDiv('sl-family-tree-container');
+
+        this.familyTree = new FamilyTree(
+            treeContainer,
+            characters,
+            (name: string) => this.characterManager.findByName(name),
+            (filePath: string) => {
+                // Single-click → open character detail in-view
+                this.selectedCharacter = filePath;
+                if (this.rootContainer) this.renderView(this.rootContainer);
+            },
+            (filePath: string) => {
+                // Double-click → open the .md file
+                this.app.workspace.openLinkText(filePath, '', true);
+            },
+        );
+        this.familyTree.render();
     }
 
     // ── Character Detail ───────────────────────────────

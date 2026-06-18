@@ -337,6 +337,7 @@ export class CharacterManager {
             gallery: this.parseGallery(safeFm.gallery),
             nickname: safeFm.nickname,
             age: safeFm.age != null ? String(safeFm.age) : undefined,
+            birthday: safeFm.birthday != null ? String(safeFm.birthday) : undefined,
             role: safeFm.role,
             roles: normalizeRoleEntries(safeFm.roles),
             occupation: safeFm.occupation,

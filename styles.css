@@ -7341,6 +7341,81 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
 }
 
 /* ============================================
+   Family Tree view
+   ============================================ */
+:root {
+    --sl-ft-blood: var(--text-muted);
+    --sl-ft-marriage: #c77dff;
+    --sl-ft-accent: var(--interactive-accent);
+    --sl-ft-node-border: var(--background-modifier-border);
+}
+
+.sl-family-tree-container {
+    width: 100%;
+    min-height: 500px;
+    height: calc(100vh - 220px);
+    display: flex;
+    flex-direction: column;
+}
+
+.sl-family-tree-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    flex-wrap: wrap;
+}
+
+.sl-family-tree-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.sl-family-tree-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-left: auto;
+}
+
+.sl-family-tree-wrapper {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 450px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--background-primary);
+}
+
+.sl-family-tree-svg {
+    display: block;
+    cursor: grab;
+}
+
+.sl-family-tree-node circle {
+    transition: stroke 0.12s, filter 0.12s;
+}
+
+.sl-family-tree-node:hover circle {
+    stroke: var(--interactive-accent);
+    filter: brightness(1.1);
+}
+
+.sl-family-tree-node:hover text {
+    fill: var(--text-normal);
+}
+
+.sl-family-tree-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+}
+
+/* ============================================
    Settings — Collapsible Color Section
    ============================================ */
 .story-line-color-section {
