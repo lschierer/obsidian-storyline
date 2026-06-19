@@ -4013,6 +4013,41 @@ body.sl-auto-hide-tab-labels .story-line-view-switcher.sl-collapsed .story-line-
     margin-right: auto;
 }
 
+/* ── Computed field config (AddFieldModal) ── */
+.storyline-field-compute-container {
+    margin-bottom: 12px;
+    padding: 8px 0;
+}
+.storyline-field-compute-source-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.storyline-field-compute-source-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+}
+.storyline-field-compute-source-row label {
+    font-size: 0.9em;
+    color: var(--text-normal);
+    cursor: pointer;
+}
+
+/* ── Computed field display (read-only) ── */
+.character-field-computed,
+.codex-field-computed,
+.location-field-computed,
+.inspector-universal-computed {
+    font-weight: 600;
+    color: var(--text-accent);
+    padding: 4px 8px;
+    font-size: 0.95em;
+}
+
 /* ── Character tag field (allies/enemies picker) ── */
 .character-tag-field {
     display: flex;

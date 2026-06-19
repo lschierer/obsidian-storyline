@@ -17,6 +17,7 @@ import {
     type CustomSectionsHost,
 } from '../components/CustomSectionsRenderer';
 import type { UniversalFieldTemplate } from '../services/FieldTemplateService';
+import { computeFieldValue } from '../services/FieldTemplateService';
 import { formatActChapterPrefix } from '../utils/actChapter';
 
 import type SceneCardsPlugin from '../main';
@@ -982,6 +983,7 @@ export class CharacterView extends ItemView {
                 undefined,
                 undefined,
                 existingSiblings,
+                this.plugin.fieldTemplates.getAll().filter(t => (t.category || 'character') === 'character'),
             );
             modal.open();
         });
@@ -1273,6 +1275,7 @@ export class CharacterView extends ItemView {
                 },
                 undefined,
                 siblings,
+                this.plugin.fieldTemplates.getAll().filter(t => (t.category || 'character') === (tpl.category || 'character')),
             );
             modal.open();
         });
@@ -1462,6 +1465,10 @@ export class CharacterView extends ItemView {
                 draft.universalFields![tpl.id] = cb.checked;
                 this.scheduleSave(draft);
             });
+        } else if (tpl.type === 'computed') {
+            const result = computeFieldValue(tpl, draft.universalFields);
+            const span = row.createEl('span', { cls: 'character-field-computed', text: result || '—' });
+            span.title = `Computed: ${tpl.computeFunction} of ${(tpl.computeSourceIds || []).length} fields`;
         } else {
             // Default: single-line text
             const input = row.createEl('input', {

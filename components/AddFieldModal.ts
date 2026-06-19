@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars, no-unused-vars, no-useless-escape, no-control-regex, no-empty -- Obsidian's API surface and several untyped third-party libraries force dynamic dispatch; floating promises are intentional in DOM/event handlers; matching enable at end of file */
 import { App, Modal, Notice, Setting } from 'obsidian';
-import { UniversalFieldTemplate, UniversalFieldType, generateId, suggestTopLevelKey, isReservedTopLevelKey } from '../services/FieldTemplateService';
+import { UniversalFieldTemplate, UniversalFieldType, ComputeFunction, generateId, suggestTopLevelKey, isReservedTopLevelKey } from '../services/FieldTemplateService';
 import { CHARACTER_CATEGORIES } from '../models/Character';
 
 // ═══════════════════════════════════════════════════════
@@ -32,6 +32,10 @@ export class AddFieldModal extends Modal {
     private topLevelKey = '';
     private topLevelKeyTouched = false;
     private defaultValue = '';
+    private computeFunction: ComputeFunction = 'average';
+    private computeSourceIds: string[] = [];
+    /** All templates in same category — used for computed field source picker */
+    private allTemplates: UniversalFieldTemplate[] = [];
 
     /**
      * @param app            Obsidian App
@@ -49,6 +53,7 @@ export class AddFieldModal extends Modal {
         onDelete?: () => void,
         sectionNames?: string[],
         siblings?: Array<{ id: string; label: string }>,
+        allTemplates?: UniversalFieldTemplate[],
     ) {
         super(app);
         this.existing = existing;
@@ -56,6 +61,7 @@ export class AddFieldModal extends Modal {
         this.onDelete = onDelete;
         this.customSectionNames = sectionNames;
         this.siblings = (siblings || []).filter(s => !existing || s.id !== existing.id);
+        this.allTemplates = (allTemplates || []).filter(t => t.type !== 'computed');
 
         if (existing) {
             this.label = existing.label;
@@ -67,6 +73,8 @@ export class AddFieldModal extends Modal {
             this.topLevelKey = existing.topLevelKey ?? '';
             this.topLevelKeyTouched = !!existing.topLevelKey;
             this.defaultValue = existing.defaultValue ?? '';
+            this.computeFunction = existing.computeFunction ?? 'average';
+            this.computeSourceIds = [...(existing.computeSourceIds ?? [])];
         } else {
             this.section = defaultSection;
         }
@@ -122,6 +130,7 @@ export class AddFieldModal extends Modal {
         // ── Type ──
         let optionsContainer: HTMLElement | null = null;
         let folderSourceContainer: HTMLElement | null = null;
+        let computeContainer: HTMLElement | null = null;
         new Setting(contentEl)
             .setName('Input type')
             .addDropdown(dd => {
@@ -130,6 +139,7 @@ export class AddFieldModal extends Modal {
                 dd.addOption('dropdown', 'Dropdown menu');
                 dd.addOption('multi-select', 'Multi-select (tags)');
                 dd.addOption('checkbox', 'Checkbox (yes/no)');
+                dd.addOption('computed', 'Computed / Derived (read-only)');
                 dd.setValue(this.type);
                 dd.onChange(v => {
                     this.type = v as UniversalFieldType;
@@ -140,6 +150,9 @@ export class AddFieldModal extends Modal {
                     if (folderSourceContainer) {
                         const showFolderSrc = this.type === 'multi-select' || this.type === 'dropdown';
                         folderSourceContainer.setCssStyles({ display: showFolderSrc ? '' : 'none' });
+                    }
+                    if (computeContainer) {
+                        computeContainer.setCssStyles({ display: this.type === 'computed' ? '' : 'none' });
                     }
                 });
             });
@@ -215,6 +228,54 @@ export class AddFieldModal extends Modal {
                     .setValue(this.folderSource)
                     .onChange(v => { this.folderSource = v.trim(); });
             });
+
+        // ── Computed field config ──
+        computeContainer = contentEl.createDiv('storyline-field-compute-container');
+        if (this.type !== 'computed') computeContainer.setCssStyles({ display: 'none' });
+
+        new Setting(computeContainer)
+            .setName('Function')
+            .setDesc('How to aggregate the source field values')
+            .addDropdown(dd => {
+                dd.addOption('average', 'Average');
+                dd.addOption('sum', 'Sum');
+                dd.addOption('max', 'Maximum');
+                dd.addOption('min', 'Minimum');
+                dd.addOption('count-truthy', 'Count truthy');
+                dd.addOption('count-falsy', 'Count falsy');
+                dd.setValue(this.computeFunction);
+                dd.onChange(v => { this.computeFunction = v as ComputeFunction; });
+            });
+
+        const sourceFieldsContainer = computeContainer.createDiv('storyline-field-compute-sources');
+        const sourceLabel = sourceFieldsContainer.createEl('div', {
+            cls: 'setting-item-name',
+            text: 'Source fields',
+        });
+        sourceLabel.setCssStyles({ marginBottom: '4px' });
+        const sourceDesc = sourceFieldsContainer.createEl('div', {
+            cls: 'setting-item-description',
+            text: 'Select which fields to include in the computation',
+        });
+        sourceDesc.setCssStyles({ marginBottom: '8px' });
+        const sourceList = sourceFieldsContainer.createDiv('storyline-field-compute-source-list');
+        for (const tpl of this.allTemplates) {
+            if (this.existing && tpl.id === this.existing.id) continue;
+            const row = sourceList.createDiv('storyline-field-compute-source-row');
+            const cb = row.createEl('input', { type: 'checkbox', attr: { id: `src-${tpl.id}` } });
+            cb.checked = this.computeSourceIds.includes(tpl.id);
+            cb.addEventListener('change', () => {
+                if (cb.checked && !this.computeSourceIds.includes(tpl.id)) {
+                    this.computeSourceIds.push(tpl.id);
+                } else if (!cb.checked) {
+                    this.computeSourceIds = this.computeSourceIds.filter(id => id !== tpl.id);
+                }
+            });
+            row.createEl('label', { text: `${tpl.label} (${tpl.section})`, attr: { for: `src-${tpl.id}` } });
+        }
+        if (this.allTemplates.length === 0) {
+            sourceList.createEl('em', { text: 'No other fields available. Add fields first, then create a computed field.' });
+        }
 
         // ── Top-level YAML key (issue #71) ──
         new Setting(contentEl)
@@ -324,6 +385,8 @@ export class AddFieldModal extends Modal {
                 placeholder: this.placeholder,
                 topLevelKey: tlk || undefined,
                 defaultValue: this.defaultValue.trim() ? this.defaultValue.trim() : undefined,
+                computeFunction: this.type === 'computed' ? this.computeFunction : undefined,
+                computeSourceIds: this.type === 'computed' && this.computeSourceIds.length ? [...this.computeSourceIds] : undefined,
                 order: this.existing?.order ?? Date.now(),
             };
 

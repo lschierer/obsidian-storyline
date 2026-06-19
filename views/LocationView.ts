@@ -21,6 +21,7 @@ import {
     type CustomSectionsHost,
 } from '../components/CustomSectionsRenderer';
 import type { UniversalFieldTemplate } from '../services/FieldTemplateService';
+import { computeFieldValue } from '../services/FieldTemplateService';
 import { formatActChapterPrefix } from '../utils/actChapter';
 
 import type SceneCardsPlugin from '../main';
@@ -752,6 +753,7 @@ export class LocationView extends ItemView {
                 undefined,
                 sectionNames,
                 existingSiblings,
+                this.plugin.fieldTemplates.getAll().filter(t => (t.category || 'character') === 'location'),
             );
             modal.open();
         });
@@ -1012,6 +1014,7 @@ export class LocationView extends ItemView {
                 },
                 sectionNames,
                 siblings,
+                this.plugin.fieldTemplates.getAll().filter(t => (t.category || 'character') === 'location'),
             );
             modal.open();
         });
@@ -1179,6 +1182,10 @@ export class LocationView extends ItemView {
                 draft.universalFields![tpl.id] = cb.checked;
                 this.scheduleSave(draft);
             });
+        } else if (tpl.type === 'computed') {
+            const result = computeFieldValue(tpl, draft.universalFields);
+            const span = row.createEl('span', { cls: 'location-field-computed', text: result || '—' });
+            span.title = `Computed: ${tpl.computeFunction} of ${(tpl.computeSourceIds || []).length} fields`;
         } else {
             const input = row.createEl('input', {
                 cls: 'location-field-input',

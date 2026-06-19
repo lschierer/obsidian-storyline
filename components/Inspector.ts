@@ -9,7 +9,7 @@ import { SceneManager } from '../services/SceneManager';
 import type SceneCardsPlugin from '../main';
 import { renderTagPillInput, renderAutocompleteInput } from './InlineSuggest';
 import { AddFieldModal } from './AddFieldModal';
-import { UniversalFieldTemplate } from '../services/FieldTemplateService';
+import { UniversalFieldTemplate, computeFieldValue } from '../services/FieldTemplateService';
 import { parseActChapterInput, actChapterHasIllegalPathChars, isPrologueAct, isEpilogueAct, PROLOGUE_ACT, EPILOGUE_ACT } from '../utils/actChapter';
 import { Scene, SceneStatus, TIMELINE_MODES, TIMELINE_MODE_LABELS, TimelineMode, getStatusOrder, resolveStatusCfg } from '../models/Scene';
 
@@ -769,6 +769,8 @@ export class InspectorComponent {
                 },
                 undefined,
                 ['Scene'],
+                undefined,
+                this.plugin.fieldTemplates.getAll().filter(t => (t.category || 'character') === 'scene'),
             );
             modal.open();
         });
@@ -817,6 +819,8 @@ export class InspectorComponent {
                     if (fresh) this.show(fresh);
                 },
                 ['Scene'],
+                undefined,
+                this.plugin.fieldTemplates.getAll().filter(t => (t.category || 'character') === 'scene'),
             );
             modal.open();
         });
@@ -897,6 +901,10 @@ export class InspectorComponent {
                 scene.universalFields![tpl.id] = cb.checked;
                 await this.sceneManager.updateScene(scene.filePath, { universalFields: { ...scene.universalFields } });
             });
+        } else if (tpl.type === 'computed') {
+            const result = computeFieldValue(tpl, scene.universalFields);
+            const span = row.createEl('span', { cls: 'inspector-universal-computed', text: result || '—' });
+            span.title = `Computed: ${tpl.computeFunction} of ${(tpl.computeSourceIds || []).length} fields`;
         } else {
             // Default: text input
             const input = row.createEl('input', {

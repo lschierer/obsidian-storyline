@@ -9,7 +9,10 @@ import { App, normalizePath } from 'obsidian';
 // ═══════════════════════════════════════════════════════
 
 /** Type of input control for a universal field */
-export type UniversalFieldType = 'text' | 'textarea' | 'dropdown' | 'multi-select' | 'checkbox';
+export type UniversalFieldType = 'text' | 'textarea' | 'dropdown' | 'multi-select' | 'checkbox' | 'computed';
+
+/** Aggregation functions available for computed fields */
+export type ComputeFunction = 'average' | 'max' | 'min' | 'sum' | 'count-truthy' | 'count-falsy';
 
 /** A single universal field template definition */
 export interface UniversalFieldTemplate {
@@ -44,6 +47,10 @@ export interface UniversalFieldTemplate {
      * a comma-separated string; the consumer normalises it.
      */
     defaultValue?: string;
+    /** For computed fields: which aggregation function to apply */
+    computeFunction?: ComputeFunction;
+    /** For computed fields: IDs of source universal fields to aggregate */
+    computeSourceIds?: string[];
 }
 
 /** A single entry in a section's merged display order (issue #92 follow-up). */
@@ -560,13 +567,51 @@ export function mirrorUniversalFieldsToTopLevel(
     for (const t of templates) {
         const k = t.topLevelKey;
         if (!k || isReservedTopLevelKey(k)) continue;
-        const v = universalFields ? universalFields[t.id] : undefined;
+        let v: unknown;
+        if (t.type === 'computed') {
+            // Derive the value on-the-fly for computed fields
+            const result = computeFieldValue(t, universalFields as Record<string, string | string[] | boolean> | undefined);
+            v = result || undefined;
+        } else {
+            v = universalFields ? universalFields[t.id] : undefined;
+        }
         if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) {
             delete fm[k];
         } else {
             const isFolderSourced = !!t.folderSource && (t.type === 'dropdown' || t.type === 'multi-select');
             fm[k] = isFolderSourced ? wrapAsWikilinks(v) : v;
         }
+    }
+}
+
+/**
+ * Compute the derived value for a computed field template given the entity's universalFields data.
+ * Returns a formatted string for display, or '' if no valid sources.
+ */
+export function computeFieldValue(tpl: UniversalFieldTemplate, universalFields: Record<string, string | string[] | boolean> | undefined): string {
+    if (!tpl.computeFunction || !tpl.computeSourceIds?.length || !universalFields) return '';
+    const fn = tpl.computeFunction;
+    if (fn === 'count-truthy' || fn === 'count-falsy') {
+        const bools = tpl.computeSourceIds.map(id => {
+            const v = universalFields[id];
+            return v === true || v === 'true' || v === 'yes' || (typeof v === 'string' && v !== '' && v !== '0' && v !== 'false' && v !== 'no');
+        });
+        const count = fn === 'count-truthy' ? bools.filter(Boolean).length : bools.filter(b => !b).length;
+        return `${count} / ${bools.length}`;
+    }
+    const nums = tpl.computeSourceIds
+        .map(id => parseFloat(String(universalFields[id] ?? '')))
+        .filter(n => !isNaN(n));
+    if (nums.length === 0) return '';
+    switch (fn) {
+        case 'sum': return String(nums.reduce((a, b) => a + b, 0));
+        case 'max': return String(Math.max(...nums));
+        case 'min': return String(Math.min(...nums));
+        case 'average': {
+            const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+            return avg % 1 === 0 ? String(avg) : avg.toFixed(2);
+        }
+        default: return '';
     }
 }
 /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars, no-unused-vars, no-useless-escape, no-control-regex, no-empty -- end of file-wide suppression block opened at line 1 */
