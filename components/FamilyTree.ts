@@ -231,12 +231,17 @@ export class FamilyTree {
             for (const r of rels) {
                 const target = this.resolveTarget(r.target);
                 if (!target || target.filePath === c.filePath) continue;
+                // Relation direction: the `type` describes the SOURCE character's
+                // role toward the target, matching the editor's bare "[type] →
+                // [target]" phrasing (on Charles, `parent → Samuel` reads as
+                // "Charles is the parent of Samuel"). So `parent` ⇒ target is C's
+                // child; `child` ⇒ target is C's parent.
                 if (r.category === 'family' && r.type === 'parent') {
-                    this.parentsOf.get(c.filePath)!.add(target.filePath);
-                    this.childrenOf.get(target.filePath)!.add(c.filePath);
-                } else if (r.category === 'family' && r.type === 'child') {
                     this.childrenOf.get(c.filePath)!.add(target.filePath);
                     this.parentsOf.get(target.filePath)!.add(c.filePath);
+                } else if (r.category === 'family' && r.type === 'child') {
+                    this.parentsOf.get(c.filePath)!.add(target.filePath);
+                    this.childrenOf.get(target.filePath)!.add(c.filePath);
                 } else if (r.category === 'romantic' && (r.type === 'spouse' || r.type === 'partner' || r.type === 'ex-partner')) {
                     const kind: CoupleKind = r.type === 'ex-partner' ? 'ex' : (r.type as CoupleKind);
                     const key = [c.filePath, target.filePath].sort().join('|') + '::' + kind;
