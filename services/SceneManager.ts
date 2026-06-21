@@ -11,6 +11,38 @@ import { App, Notice, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } 
 import { BeatSheetTemplate, FilterPreset, Scene, SceneFilter, SceneStatus, SortConfig, getStatusOrder } from '../models/Scene';
 
 /**
+ * Normalize a frontmatter `acts` / `chapters` value into a clean sorted
+ * number array. Accepts arrays, single numbers, or comma-separated strings
+ * (which can appear after a sync conflict mangles the YAML). Issue #176.
+ */
+function normalizeActChapterList(raw: unknown): number[] {
+    if (raw == null) return [];
+    let arr: unknown[] = [];
+    if (Array.isArray(raw)) {
+        arr = raw;
+    } else if (typeof raw === 'number' && Number.isFinite(raw)) {
+        arr = [raw];
+    } else if (typeof raw === 'string') {
+        // Tolerate "1,2,3" or "1 - 5" style strings from corrupted frontmatter.
+        const rangeMatch = raw.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+            const lo = parseInt(rangeMatch[1], 10);
+            const hi = parseInt(rangeMatch[2], 10);
+            for (let i = Math.min(lo, hi); i <= Math.max(lo, hi); i++) arr.push(i);
+        } else {
+            arr = raw.split(',').map(s => s.trim());
+        }
+    } else {
+        return [];
+    }
+    const nums = arr
+        .map(v => Number(v))
+        .filter(n => Number.isFinite(n))
+        .map(n => Math.trunc(n));
+    return Array.from(new Set(nums)).sort((a, b) => a - b);
+}
+
+/**
  * Manages CRUD operations, indexing, and project management for scenes.
  *
  * Query/filter/sort/statistics logic is delegated to SceneQueryService.
@@ -602,8 +634,8 @@ export class SceneManager implements ISceneStore {
                     ? normalizeStoryLineLocale(fm.language ?? fm['storyline-locale'])
                     : undefined,
                 ...folders,
-                definedActs: Array.isArray(fm.acts) ? fm.acts.map(Number).filter((n: number) => !isNaN(n)) : [],
-                definedChapters: Array.isArray(fm.chapters) ? fm.chapters.map(Number).filter((n: number) => !isNaN(n)) : [],
+                definedActs: normalizeActChapterList(fm.acts),
+                definedChapters: normalizeActChapterList(fm.chapters),
                 actLabels: (fm.actLabels && typeof fm.actLabels === 'object') ? Object.fromEntries(Object.entries(fm.actLabels).map(([k, v]) => [Number(k), String(v)])) : {},
                 chapterLabels: (fm.chapterLabels && typeof fm.chapterLabels === 'object') ? Object.fromEntries(Object.entries(fm.chapterLabels).map(([k, v]) => [Number(k), String(v)])) : {},
                 actDescriptions: (fm.actDescriptions && typeof fm.actDescriptions === 'object') ? Object.fromEntries(Object.entries(fm.actDescriptions).map(([k, v]) => [Number(k), String(v)])) : {},
@@ -998,7 +1030,34 @@ export class SceneManager implements ISceneStore {
             if (updated) this.scenes.set(newPath, updated);
         }
         this.bumpVersion(newPath);
+
+        // Issue #175 — keep the linked scene notes file name in sync with the
+        // scene title so renaming a scene also renames its "Title - Notes.md".
+        await this.renameSceneNotesFile(newPath);
+
         return newPath;
+    }
+
+    /**
+     * Rename a scene's external notes file to match the scene's current title.
+     * No-op when there is no notes file, the notes file lives outside the
+     * project's notes folder, or the name already matches. Issue #175.
+     */
+    private async renameSceneNotesFile(scenePath: string): Promise<void> {
+        const scene = this.scenes.get(scenePath);
+        if (!scene || !scene.notesFile) return;
+        const notesFile = this.app.vault.getAbstractFileByPath(scene.notesFile);
+        if (!(notesFile instanceof TFile)) return;
+
+        const notesFolder = normalizePath(this.getSceneNotesFolder());
+        if (!normalizePath(notesFile.path).startsWith(`${notesFolder}/`)) return;
+
+        const targetPath = this.getUniqueSceneNotesPath(scene, notesFile.path);
+        if (normalizePath(targetPath) === normalizePath(notesFile.path)) return;
+
+        await this.app.fileManager.renameFile(notesFile, targetPath);
+        await this.updateScene(scenePath, { notesFile: targetPath });
+        scene.notesFile = targetPath;
     }
 
     /**
@@ -1474,9 +1533,22 @@ export class SceneManager implements ISceneStore {
     /** Add empty acts (they persist even without scenes) */
     async addActs(actNumbers: number[]): Promise<void> {
         if (!this._activeProject) return;
+        // Issue #176 — sanitize input: drop NaN/non-finite values and dedupe
+        // so repeated calls (e.g. on mobile where the dialog gave no feedback)
+        // don't stack redundant frontmatter writes that can race with sync.
+        const clean = actNumbers
+            .map(Number)
+            .filter(n => Number.isFinite(n))
+            .map(n => Math.trunc(n));
+        if (clean.length === 0) return;
+
         const existing = this._activeProject.definedActs;
-        const merged = new Set([...existing, ...actNumbers]);
-        this._activeProject.definedActs = Array.from(merged).sort((a, b) => a - b);
+        const merged = new Set([...existing, ...clean]);
+        const next = Array.from(merged).sort((a, b) => a - b);
+        // Skip the write entirely if nothing actually changed — prevents the
+        // "nothing happened, so I tapped it again" loop that corrupted projects.
+        if (next.length === existing.length && next.every((v, i) => v === existing[i])) return;
+        this._activeProject.definedActs = next;
         await this.saveProjectFrontmatter(this._activeProject);
     }
 
@@ -1490,9 +1562,17 @@ export class SceneManager implements ISceneStore {
     /** Add empty chapters */
     async addChapters(chapterNumbers: number[]): Promise<void> {
         if (!this._activeProject) return;
+        // Issue #176 — sanitize + skip no-op writes (see addActs).
+        const clean = chapterNumbers
+            .map(Number)
+            .filter(n => Number.isFinite(n))
+            .map(n => Math.trunc(n));
+        if (clean.length === 0) return;
         const existing = this._activeProject.definedChapters;
-        const merged = new Set([...existing, ...chapterNumbers]);
-        this._activeProject.definedChapters = Array.from(merged).sort((a, b) => a - b);
+        const merged = new Set([...existing, ...clean]);
+        const next = Array.from(merged).sort((a, b) => a - b);
+        if (next.length === existing.length && next.every((v, i) => v === existing[i])) return;
+        this._activeProject.definedChapters = next;
         await this.saveProjectFrontmatter(this._activeProject);
     }
 

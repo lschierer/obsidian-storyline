@@ -6,6 +6,22 @@ If StoryLine helps your writing, please consider buying me a coffee. Donations k
 
 [![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate?hosted_button_id=A2N2LE7EUBL3A)
 
+## Version 1.10.30
+
+### New Features
+
+- **Persistent Storyline (Plotlines) view state** — The Plotlines view now remembers your chosen view mode (List/Subway), sort order, Arc Point filter, and scene-tag pill visibility between sessions, matching the persistence already in place for the Board, Timeline, and Research views.
+- **Renaming a scene renames its linked notes file** — When you rename a scene, its companion `Scene Title - Notes.md` file is renamed to match, and the `notesFile` link is updated. *(Issue [#175](https://github.com/PixeroJan/obsidian-storyline/issues/175))*
+
+### Bug Fixes
+
+- **Empty custom fields no longer linger in frontmatter** — Clearing or deleting a Universal Field value through StoryLine now removes the entry from `universalFields` (and its mirrored top-level key) instead of leaving an empty `fieldId: ''` behind. *(Issue [#175](https://github.com/PixeroJan/obsidian-storyline/issues/175))*
+- **Safer act/chapter adding on mobile** — `addActs` / `addChapters` now sanitize input, dedupe, and skip no-op writes, preventing the repeated-tap loop that could corrupt project frontmatter under sync. Project frontmatter parsing also tolerates single-number or comma-string `acts`/`chapters` values produced by sync conflicts. *(Issue [#176](https://github.com/PixeroJan/obsidian-storyline/issues/176))*
+- **Plotline subway connector gradients** — Connectors between three or more plotlines now render a proper multi-stop gradient through every intermediate lane color instead of jumping straight from the top to the bottom lane. *(Issue [#177](https://github.com/PixeroJan/obsidian-storyline/issues/177))*
+- **Corkboard note editor stays visible on iOS** — Tapping a corkboard note to edit it on iOS no longer pushes the note off-screen when the soft keyboard appears; the canvas pans to keep the note in the visible area. *(Issue [#178](https://github.com/PixeroJan/obsidian-storyline/issues/178))*
+
+---
+
 ## Version 1.10.29
 
 - Updated to use the latest Obsidian API conventions (replaced deprecated `document`, `instanceof`, `activeLeaf`, and `setDynamicTooltip` calls) for better compatibility with popout windows and future Obsidian versions.

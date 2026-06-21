@@ -42,6 +42,12 @@ export class StorylineView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.sceneManager = sceneManager;
+        // Restore last used Storyline view state
+        const s = plugin.settings;
+        this.plotlineViewMode = s.lastStorylineViewMode || 'subway';
+        this.sortMode = s.lastStorylineSortMode || 'reading-order';
+        this.arcAnchorFilter = s.lastStorylineArcFilter || 'all';
+        this.showSubwayTagPills = s.lastStorylineShowTagPills !== false;
     }
 
     getViewType(): string {
@@ -71,6 +77,22 @@ export class StorylineView extends ItemView {
 
     async onClose(): Promise<void> {}
 
+    /** Update sort mode, persist, and refresh. */
+    private setSortMode(mode: SortMode): void {
+        this.sortMode = mode;
+        this.plugin.settings.lastStorylineSortMode = mode;
+        this.plugin.saveSettings();
+        this.refresh();
+    }
+
+    /** Update plotline view mode (list/subway), persist, and refresh. */
+    private setViewMode(mode: PlotlineViewMode): void {
+        this.plotlineViewMode = mode;
+        this.plugin.settings.lastStorylineViewMode = mode;
+        this.plugin.saveSettings();
+        this.refresh();
+    }
+
     private renderView(container: HTMLElement): void {
         container.empty();
 
@@ -97,19 +119,19 @@ export class StorylineView extends ItemView {
             const menu = new Menu();
             menu.addItem((item: MenuItem) => {
                 item.setTitle(`${this.sortMode === 'alpha' ? '✓ ' : ''}Alphabetical`)
-                    .onClick(() => { this.sortMode = 'alpha'; this.refresh(); });
+                    .onClick(() => { this.setSortMode('alpha'); });
             });
             menu.addItem((item: MenuItem) => {
                 item.setTitle(`${this.sortMode === 'scenes-desc' ? '✓ ' : ''}Most scenes first`)
-                    .onClick(() => { this.sortMode = 'scenes-desc'; this.refresh(); });
+                    .onClick(() => { this.setSortMode('scenes-desc'); });
             });
             menu.addItem((item: MenuItem) => {
                 item.setTitle(`${this.sortMode === 'scenes-asc' ? '✓ ' : ''}Fewest scenes first`)
-                    .onClick(() => { this.sortMode = 'scenes-asc'; this.refresh(); });
+                    .onClick(() => { this.setSortMode('scenes-asc'); });
             });
             menu.addItem((item: MenuItem) => {
                 item.setTitle(`${this.sortMode === 'reading-order' ? '✓ ' : ''}Reading order (chapter #)`)
-                    .onClick(() => { this.sortMode = 'reading-order'; this.refresh(); });
+                    .onClick(() => { this.setSortMode('reading-order'); });
             });
             menu.showAtPosition({ x: e.clientX, y: e.clientY });
         });
@@ -128,6 +150,8 @@ export class StorylineView extends ItemView {
             });
             btn.addEventListener('click', () => {
                 this.arcAnchorFilter = mode.value;
+                this.plugin.settings.lastStorylineArcFilter = mode.value;
+                this.plugin.saveSettings();
                 arcFilterContainer.querySelectorAll('.story-line-arc-filter-btn').forEach(b => b.removeClass('is-active'));
                 btn.addClass('is-active');
                 this.refresh();
@@ -189,6 +213,8 @@ export class StorylineView extends ItemView {
             attachTooltip(tagToggle, this.showSubwayTagPills ? 'Hide scene tags' : 'Show scene tags');
             tagToggle.addEventListener('click', () => {
                 this.showSubwayTagPills = !this.showSubwayTagPills;
+                this.plugin.settings.lastStorylineShowTagPills = this.showSubwayTagPills;
+                this.plugin.saveSettings();
                 this.refresh();
             });
         }
@@ -214,7 +240,7 @@ export class StorylineView extends ItemView {
         const listIcon = listBtn.createSpan();
         obsidian.setIcon(listIcon, 'list');
         attachTooltip(listBtn, 'List view');
-        listBtn.addEventListener('click', () => { this.plotlineViewMode = 'list'; this.refresh(); });
+        listBtn.addEventListener('click', () => { this.setViewMode('list'); });
 
         const subwayBtn = viewToggle.createEl('button', {
             cls: `storyline-toggle-btn ${this.plotlineViewMode === 'subway' ? 'active' : ''}`,
@@ -222,7 +248,7 @@ export class StorylineView extends ItemView {
         const subwayIcon = subwayBtn.createSpan();
         obsidian.setIcon(subwayIcon, 'chart-gantt');
         attachTooltip(subwayBtn, 'Subway map');
-        subwayBtn.addEventListener('click', () => { this.plotlineViewMode = 'subway'; this.refresh(); });
+        subwayBtn.addEventListener('click', () => { this.setViewMode('subway'); });
 
         const content = container.createDiv('story-line-storyline-content');
 
@@ -567,14 +593,16 @@ export class StorylineView extends ItemView {
             grad.setAttribute('id', gradId);
             grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
             grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
-            const stop1 = activeDocument.createElementNS(svgNS, 'stop');
-            stop1.setAttribute('offset', '0%');
-            stop1.setAttribute('stop-color', laneColor(sortedLanes[0], plotlineKeys[sortedLanes[0]]));
-            const stop2 = activeDocument.createElementNS(svgNS, 'stop');
-            stop2.setAttribute('offset', '100%');
-            stop2.setAttribute('stop-color', laneColor(sortedLanes[sortedLanes.length - 1], plotlineKeys[sortedLanes[sortedLanes.length - 1]]));
-            grad.appendChild(stop1);
-            grad.appendChild(stop2);
+            // One gradient stop per lane, positioned proportionally to its Y
+            // so middle lanes contribute their color instead of being skipped.
+            const span = botY - topY || 1;
+            for (const lane of sortedLanes) {
+                const stop = activeDocument.createElementNS(svgNS, 'stop');
+                const offset = (laneY(lane) - topY) / span;
+                stop.setAttribute('offset', `${(offset * 100).toFixed(1)}%`);
+                stop.setAttribute('stop-color', laneColor(lane, plotlineKeys[lane]));
+                grad.appendChild(stop);
+            }
             defs.appendChild(grad);
 
             const connector = activeDocument.createElementNS(svgNS, 'rect');

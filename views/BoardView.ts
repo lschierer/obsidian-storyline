@@ -684,6 +684,11 @@ export class BoardView extends ItemView {
                     });
                 }
 
+                // Issue #178 — on iOS the soft keyboard pushes the note
+                // off-screen. Pan the corkboard camera so the note sits in
+                // the upper portion of the viewport (above the keyboard).
+                this.panCorkboardToRevealNote(cardEl);
+
                 outsidePointerHandler = (event: PointerEvent) => {
                     const target = event.target as Node | null;
                     if (!isEditing) return;
@@ -977,6 +982,43 @@ export class BoardView extends ItemView {
 
     private applyCorkboardCamera(canvas: HTMLElement): void {
         canvas.setCssStyles({ transform: `translate(${this.corkboardCamera.x}px, ${this.corkboardCamera.y}px) scale(${this.corkboardCamera.zoom})` });
+    }
+
+    /**
+     * Pan the corkboard camera so the given note card is visible in the
+     * upper portion of the viewport. Used when a note enters edit mode on
+     * mobile, where the soft keyboard would otherwise push it off-screen.
+     * Issue #178. No-op on desktop or when the card is already well-placed.
+     */
+    private panCorkboardToRevealNote(cardEl: HTMLElement): void {
+        if (!isMobile) return;
+        const viewport = cardEl.closest('.story-line-corkboard-viewport') as HTMLElement | null;
+        const canvas = cardEl.closest('.story-line-corkboard-canvas') as HTMLElement | null;
+        if (!viewport || !canvas) return;
+
+        const vpRect = viewport.getBoundingClientRect();
+        const cardRect = cardEl.getBoundingClientRect();
+        const zoom = this.corkboardCamera.zoom || 1;
+
+        // Reserve roughly the bottom 45% of the viewport for the keyboard.
+        const safeBottom = vpRect.top + vpRect.height * 0.55;
+        const safeTop = vpRect.top + 24;
+
+        const cardTop = cardRect.top;
+        const cardBottom = cardRect.bottom;
+
+        // Already visible within the safe zone — nothing to do.
+        if (cardTop >= safeTop && cardBottom <= safeBottom) return;
+
+        // Compute how far (in screen px) we need to shift so the card's top
+        // lands ~24px below the viewport top. Translate that back through
+        // the zoom to a camera-space delta.
+        const desiredCardTop = safeTop + 8;
+        const dyScreen = desiredCardTop - cardTop;
+        const dyCamera = dyScreen / zoom;
+
+        this.corkboardCamera.y += dyCamera;
+        this.applyCorkboardCamera(canvas);
     }
 
     /**

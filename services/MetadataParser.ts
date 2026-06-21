@@ -215,8 +215,20 @@ export class MetadataParser {
                 continue;
             }
             if (key === 'universalFields') {
-                if (value && typeof value === 'object' && Object.keys(value).length > 0) {
-                    frontmatter[key] = value;
+                if (value && typeof value === 'object') {
+                    // Issue #175 — drop empty entries so emptied custom fields
+                    // don't linger as `fieldId: ''` in the frontmatter.
+                    const cleaned: Record<string, unknown> = {};
+                    for (const [fk, fv] of Object.entries(value as Record<string, unknown>)) {
+                        if (fv === undefined || fv === null || fv === '') continue;
+                        if (Array.isArray(fv) && fv.length === 0) continue;
+                        cleaned[fk] = fv;
+                    }
+                    if (Object.keys(cleaned).length > 0) {
+                        frontmatter[key] = cleaned;
+                    } else {
+                        delete frontmatter[key];
+                    }
                 } else {
                     delete frontmatter[key];
                 }
