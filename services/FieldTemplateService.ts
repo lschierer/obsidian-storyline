@@ -378,6 +378,11 @@ export class FieldTemplateService {
                     order: typeof f.order === 'number' ? f.order : 0,
                     topLevelKey: typeof f.topLevelKey === 'string' && f.topLevelKey.trim() ? f.topLevelKey.trim() : undefined,
                     defaultValue: typeof f.defaultValue === 'string' && f.defaultValue.length > 0 ? f.defaultValue : undefined,
+                    // Computed-field config must round-trip too, or computed
+                    // fields silently lose their aggregation on every reload
+                    // (compute → '' → the mirrored top-level value gets wiped).
+                    computeFunction: f.computeFunction,
+                    computeSourceIds: Array.isArray(f.computeSourceIds) ? f.computeSourceIds : undefined,
                 }));
             } else {
                 this.templates = [];
@@ -613,5 +618,39 @@ export function computeFieldValue(tpl: UniversalFieldTemplate, universalFields: 
         }
         default: return '';
     }
+}
+
+/**
+ * Merge several field-template files (one per book) into a single set for a
+ * series. Union by template `id` (identical ids collapse to one); when two
+ * *different* ids claim the same `topLevelKey`, the first wins and later ones
+ * are dropped — they are stale generations of the same logical field.
+ * `sectionOrders` are merged with earlier files taking precedence per key.
+ * Used by the one-time per-book → series consolidation migration.
+ */
+export function mergeFieldTemplateFiles(files: FieldTemplateFile[]): FieldTemplateFile {
+    const byId = new Map<string, UniversalFieldTemplate>();
+    const topKeyOwner = new Map<string, string>(); // topLevelKey -> owning id
+    for (const file of files) {
+        for (const t of file?.fields ?? []) {
+            if (!t || !t.id || byId.has(t.id)) continue;
+            const tk = t.topLevelKey;
+            if (tk) {
+                const owner = topKeyOwner.get(tk);
+                if (owner && owner !== t.id) continue; // different id, same key → stale dup
+                topKeyOwner.set(tk, t.id);
+            }
+            byId.set(t.id, { ...t });
+        }
+    }
+    const sectionOrders: Record<string, SectionOrderEntry[]> = {};
+    for (const file of files) {
+        for (const [k, v] of Object.entries(file?.sectionOrders ?? {})) {
+            if (!(k in sectionOrders) && Array.isArray(v)) {
+                sectionOrders[k] = v.map(e => ({ kind: e.kind, key: e.key }));
+            }
+        }
+    }
+    return { version: 1, fields: [...byId.values()], sectionOrders };
 }
 /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-floating-promises, @typescript-eslint/no-misused-promises, @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unused-vars, no-unused-vars, no-useless-escape, no-control-regex, no-empty -- end of file-wide suppression block opened at line 1 */

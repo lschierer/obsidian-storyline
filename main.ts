@@ -7,7 +7,7 @@ import { SceneManager } from './services/SceneManager';
 import { registerCustomStatuses } from './models/Scene';
 import { setWriteSceneFieldsAsWikilinks, setWordcountExclusions, setWordcountLocale } from './services/MetadataParser';
 import { normalizeStoryLineLocale } from './utils/locale';
-import { setActiveTemplatesProvider, setTopLevelMirrorEnabled, mirrorUniversalFieldsToTopLevel, hydrateUniversalFieldsFromTopLevel, isReservedTopLevelKey, type FieldTemplateChange } from './services/FieldTemplateService';
+import { setActiveTemplatesProvider, setTopLevelMirrorEnabled, mirrorUniversalFieldsToTopLevel, hydrateUniversalFieldsFromTopLevel, isReservedTopLevelKey, mergeFieldTemplateFiles, type FieldTemplateChange, type FieldTemplateFile } from './services/FieldTemplateService';
 import {
     BOARD_VIEW_TYPE,
     TIMELINE_VIEW_TYPE,
@@ -71,6 +71,9 @@ export default class SceneCardsPlugin extends Plugin {
     sceneManager!: SceneManager;
     /** Set to true once System/ migration is confirmed — guards saveSettings stripping */
     private _systemMigrationDone = false;
+    /** Live template ids awaiting the one-time universalFields cleanup sweep,
+     *  deferred until entities are loaded. Set by migrateFieldTemplatesToSeries. */
+    private _pendingUfCleanup: Set<string> | null = null;
     /** Snapshot of colour settings from data.json (global defaults) */
     private _globalColorDefaults: Partial<SceneCardsSettings> = {};
     locationManager!: LocationManager;
@@ -108,7 +111,7 @@ export default class SceneCardsPlugin extends Plugin {
         this.linkScanner = new LinkScanner(this.characterManager, this.locationManager);
         this.linkScanner.setCodexManager(this.codexManager);
         this.cascadeRename = new CascadeRenameService(this.app, this.sceneManager, this.characterManager, this.locationManager);
-        this.fieldTemplates = new FieldTemplateService(this.app, () => this.getProjectSystemFolder());
+        this.fieldTemplates = new FieldTemplateService(this.app, () => this.getFieldTemplateSystemFolder());
         // Issue #71 — expose templates to parsers for top-level YAML mirroring
         setActiveTemplatesProvider(() => this.fieldTemplates.getAll());
         setTopLevelMirrorEnabled(this.settings.universalFieldsMirrorTopLevel !== false);
@@ -228,6 +231,9 @@ export default class SceneCardsPlugin extends Plugin {
             await this.migrateProjectDataFromSettings();
             // Load per-project data from System/ files (tagColors, aliases, etc.)
             await this.loadProjectSystemData();
+            // One-time: consolidate per-book field templates into the series
+            // store and purge orphaned universalFields / legacy custom data.
+            await this.migrateFieldTemplatesToSeries();
             // Load universal field templates from System/field-templates.json
             await this.fieldTemplates.load();
             // Load corkboard layout from System/board.json
@@ -242,6 +248,14 @@ export default class SceneCardsPlugin extends Plugin {
             try {
                 await this.scanExtraFolders();
             } catch { /* not set yet */ }
+            // Run the deferred one-time universalFields cleanup now that
+            // characters / codex / locations / scenes are populated.
+            if (this._pendingUfCleanup) {
+                try {
+                    await this.cleanupOrphanUniversalFields(this._pendingUfCleanup);
+                } catch (e) { console.error('[StoryLine] deferred universalFields cleanup:', e); }
+                this._pendingUfCleanup = null;
+            }
             // Scan scene bodies for wikilinks after entities are loaded
             this.linkScanner.rebuildLookups(this.settings.characterAliases);
             this.linkScanner.scanAll(this.sceneManager.getAllScenes());
@@ -1132,6 +1146,20 @@ export default class SceneCardsPlugin extends Plugin {
         return `${this.getProjectBaseFolder()}/System`;
     }
 
+    /**
+     * Return the System/ folder that holds universal **field templates**.
+     * These are shared across all books in a series, so they live at the
+     * series level (`<series>/System`) rather than per-book — otherwise the
+     * same logical field gets divergent ids in different books, orphaning
+     * `universalFields` values on shared codex entities. Standalone projects
+     * (no seriesId) fall back to their own per-project System folder.
+     */
+    getFieldTemplateSystemFolder(): string {
+        const seriesFolder = this.sceneManager?.getSeriesFolder?.() ?? null;
+        if (seriesFolder) return `${seriesFolder}/System`;
+        return this.getProjectSystemFolder();
+    }
+
     // ────────────────────────────────────
     //  Issue #71 follow-up — universal-field migrations
     // ────────────────────────────────────
@@ -1182,6 +1210,17 @@ export default class SceneCardsPlugin extends Plugin {
                             didChange = true;
                         }
                     }
+                    // Also drop the removed template's per-entity universalFields
+                    // value so deleting/recreating a field never leaves a stale
+                    // orphan behind (the accumulation this whole system had).
+                    if (removedTpl && change?.id) {
+                        const uf = fm.universalFields as Record<string, unknown> | undefined;
+                        if (uf && typeof uf === 'object' && uf[change.id] !== undefined) {
+                            delete uf[change.id];
+                            if (Object.keys(uf).length === 0) delete fm.universalFields;
+                            didChange = true;
+                        }
+                    }
                     if (mirrorOn) {
                         const before = JSON.stringify(fm);
                         // Hydrate first so values that only live in top-level
@@ -1200,6 +1239,115 @@ export default class SceneCardsPlugin extends Plugin {
         }
         if (touched > 0) {
             new Notice(`StoryLine: synced custom-field YAML in ${touched} file${touched === 1 ? '' : 's'}.`);
+        }
+    }
+
+    /**
+     * One-time migration: consolidate each book's per-project
+     * `System/field-templates.json` into a single series-level store, then
+     * purge the orphaned `universalFields` / legacy `custom` data that the old
+     * per-book scoping left on shared codex entities.
+     *
+     * Runs only when the active project is in a series and the series-level
+     * field-templates.json does not yet exist (the guard). Safe/idempotent
+     * thereafter — on later launches the series file exists and it returns
+     * early, leaving normal loading to {@link FieldTemplateService.load}.
+     */
+    async migrateFieldTemplatesToSeries(): Promise<void> {
+        const seriesFolder = this.sceneManager?.getSeriesFolder?.() ?? null;
+        if (!seriesFolder) return; // standalone project — nothing to consolidate
+        const adapter = this.app.vault.adapter;
+        const seriesSystem = normalizePath(`${seriesFolder}/System`);
+        const seriesFile = normalizePath(`${seriesSystem}/field-templates.json`);
+        try {
+            if (await adapter.exists(seriesFile)) return; // already consolidated
+
+            const meta = await this.seriesManager.loadSeriesMetadata(seriesFolder);
+            const bookNames: string[] = meta?.bookOrder ?? [];
+            const perBookFiles: string[] = [];
+            const loaded: FieldTemplateFile[] = [];
+            for (const book of bookNames) {
+                const p = normalizePath(`${seriesFolder}/${book}/System/field-templates.json`);
+                if (await adapter.exists(p)) {
+                    try {
+                        loaded.push(JSON.parse(await adapter.read(p)) as FieldTemplateFile);
+                        perBookFiles.push(p);
+                    } catch (e) { console.error('[StoryLine] migrateFieldTemplatesToSeries read:', p, e); }
+                }
+            }
+            if (loaded.length === 0) return; // no per-book templates to migrate
+
+            const merged = mergeFieldTemplateFiles(loaded);
+
+            if (!await adapter.exists(seriesSystem)) await this.app.vault.createFolder(seriesSystem);
+            await adapter.write(seriesFile, JSON.stringify(merged, null, 2));
+
+            // Retire the consumed per-book files (keep as .bak) so they no
+            // longer shadow the series store.
+            for (const p of perBookFiles) {
+                try {
+                    if (!(await adapter.exists(`${p}.bak`))) await adapter.rename(p, `${p}.bak`);
+                } catch (e) { console.error('[StoryLine] migrateFieldTemplatesToSeries rename:', p, e); }
+            }
+
+            // Defer the entity cleanup until after entities are loaded (they
+            // are not yet populated at this point in startup). The startup
+            // sequence runs it once `loadActiveProjectEntities` /
+            // `scanExtraFolders` have populated the managers, by which time
+            // `fieldTemplates.load()` has also read this new series store.
+            this._pendingUfCleanup = new Set(merged.fields.map(f => f.id));
+
+            new Notice('StoryLine: consolidated field templates for the series.');
+        } catch (e) {
+            console.error('[StoryLine] migrateFieldTemplatesToSeries:', e);
+        }
+    }
+
+    /**
+     * Entity sweep used by {@link migrateFieldTemplatesToSeries}. For every
+     * character/codex/location/scene: backfill live template ids from their
+     * top-level mirror, drop `universalFields` whose id is no longer a live
+     * template (orphans left by delete/recreate), purge legacy
+     * `custom["Magic :: *"]` / duplicate `custom.nephil`, then re-mirror to
+     * top-level. `liveIds` is passed in because it is the authoritative set
+     * just written to the series store.
+     */
+    private async cleanupOrphanUniversalFields(liveIds: Set<string>): Promise<void> {
+        const files = this.collectEntityFiles();
+        let touched = 0;
+        for (const file of files) {
+            try {
+                await this.app.fileManager.processFrontMatter(file, (fm) => {
+                    const before = JSON.stringify(fm);
+                    // 1) backfill live ids from their existing top-level mirror
+                    const hydrated = hydrateUniversalFieldsFromTopLevel(fm, fm.universalFields);
+                    if (hydrated !== fm.universalFields) fm.universalFields = hydrated;
+                    // 2) drop orphaned universalFields ids
+                    const uf = fm.universalFields as Record<string, unknown> | undefined;
+                    if (uf && typeof uf === 'object') {
+                        for (const id of Object.keys(uf)) {
+                            if (!liveIds.has(id)) delete uf[id];
+                        }
+                        if (Object.keys(uf).length === 0) delete fm.universalFields;
+                    }
+                    // 3) purge legacy custom "Magic :: *" and duplicate custom.nephil
+                    const custom = fm.custom as Record<string, unknown> | undefined;
+                    if (custom && typeof custom === 'object') {
+                        for (const k of Object.keys(custom)) {
+                            if (/^Magic\s*::/.test(k) || k === 'nephil') delete custom[k];
+                        }
+                        if (Object.keys(custom).length === 0) delete fm.custom;
+                    }
+                    // 4) re-mirror to top-level (recomputes computed fields)
+                    mirrorUniversalFieldsToTopLevel(fm, fm.universalFields);
+                    if (JSON.stringify(fm) !== before) touched++;
+                });
+            } catch (e) {
+                console.error('[StoryLine] cleanupOrphanUniversalFields:', file.path, e);
+            }
+        }
+        if (touched > 0) {
+            new Notice(`StoryLine: cleaned stale custom-field data in ${touched} file${touched === 1 ? '' : 's'}.`);
         }
     }
 
